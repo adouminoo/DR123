@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // DR123 intentionally uses no Firebase Auth. Firestore rules cannot verify
+    // an app-only password session. These rules are suitable for a private
+    // trusted deployment or local demo only; use Firebase Auth or a backend
+    // proxy before exposing real patient data publicly.
+    match /settings/{document} {
+      allow read, write: if true;
+    }
+    match /patients/{document} {
+      allow read, write: if true;
+    }
+    match /appointments/{document} {
+      allow read, write: if true;
+    }
+    match /treatments/{document} {
+      allow read, write: if true;
+    }
+    match /services/{document} {
+      allow read, write: if true;
+    }
+    match /service_categories/{document} {
+      allow read, write: if true;
+    }
+    match /note_timeline/{document} {
+      allow read, write: if true;
+    }
+    match /payments/{document} {
+      allow read, write: if true;
+    }
+    match /audit_logs/{document} {
+      allow read, create: if true;
+      allow update, delete: if false;
+    }
+  }
+}

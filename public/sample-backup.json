@@ -1,0 +1,25 @@
+{
+  "exportedAt": "2026-06-13T12:00:00.000Z",
+  "patients": [
+    {
+      "id": "patient-1",
+      "patientId": "PAT-0001",
+      "name": "Amina El Mansouri",
+      "phone": "+212612345678",
+      "age": 34,
+      "gender": "Female",
+      "address": "Maarif, Casablanca",
+      "medicalNotes": "Allergic to penicillin.",
+      "createdAt": "2026-01-05T09:00:00.000Z",
+      "updatedAt": "2026-01-05T09:00:00.000Z"
+    }
+  ],
+  "appointments": [],
+  "payments": [],
+  "treatments": [],
+  "services": [],
+  "serviceCategories": [],
+  "settings": [],
+  "timelineNotes": [],
+  "auditLogs": []
+}

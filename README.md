@@ -246,6 +246,17 @@ backup-2026-06-13.json
 4. In GitHub repo settings, enable Pages with source `GitHub Actions`.
 5. The included workflow `.github/workflows/pages.yml` builds and deploys `dist`.
 
+The deployed site must be served from the GitHub Actions artifact, not from the source branch root. If the live HTML contains `/src/main.tsx`, GitHub Pages is serving the unbuilt repository source instead of the Vite output. Set **Settings -> Pages -> Build and deployment -> Source** to **GitHub Actions**.
+
+The Pages build is verified by:
+
+```bash
+npm run build:pages
+npm run verify:pages
+```
+
+The verifier checks that `dist/index.html` references `/DR123/assets/...`, does not contain `/src/main.tsx`, does not contain unresolved `%BASE_URL%`, and includes `toplinkyou-logo.png`.
+
 Manual deploy with `gh-pages`:
 
 ```bash

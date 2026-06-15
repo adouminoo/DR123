@@ -6,7 +6,7 @@ import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
 import { EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core';
 import frLocale from '@fullcalendar/core/locales/fr';
 import arLocale from '@fullcalendar/core/locales/ar';
-import { deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { deleteDoc, setDoc } from 'firebase/firestore';
 import {
   Activity,
   Archive,
@@ -26,8 +26,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react';
-import { db } from './lib/firebase';
-import { clearSession, ensureAdminPassword, hasSession, rememberSession, sha256, verifyPassword } from './lib/auth';
+import { changeCurrentPassword, loginWithPassword, logout, registerWithActivationCode, watchAuth, type AppUser } from './lib/auth';
 import {
   addPayment,
   createAudit,
@@ -48,6 +47,8 @@ import {
   permanentlyDelete,
   purgeOldDeleted,
   restoreItem,
+  scopedDoc,
+  setActiveUserId,
   softDelete,
   statuses,
   toCsv,
@@ -529,8 +530,12 @@ function eventColor(status: AppointmentStatus) {
   }[status];
 }
 
-function Login({ onLogin, t }: { onLogin: () => void; t: Record<string, string> }) {
+function Login({ t }: { t: Record<string, string> }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [activationCode, setActivationCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -539,14 +544,13 @@ function Login({ onLogin, t }: { onLogin: () => void; t: Record<string, string> 
     setLoading(true);
     setError('');
     try {
-      if (await verifyPassword(password)) {
-        rememberSession();
-        onLogin();
+      if (mode === 'register') {
+        await registerWithActivationCode(name, email, password, activationCode);
       } else {
-        setError(t.invalidPassword);
+        await loginWithPassword(email, password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not verify password.');
+      setError(err instanceof Error ? err.message : 'Could not verify account.');
     } finally {
       setLoading(false);
     }
@@ -561,12 +565,30 @@ function Login({ onLogin, t }: { onLogin: () => void; t: Record<string, string> 
             <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-16 w-16 rounded-full object-contain bg-white p-1" />
             <h1 className="text-3xl font-bold">{APP_NAME}</h1>
           </div>
-          <p className="mt-2 text-sm text-slate-300">{t.loginHelp}</p>
+          <p className="mt-2 text-sm text-slate-300">Login to your account, or register once with an activation code from the clinic owner.</p>
         </div>
+        <div className="mb-5 grid grid-cols-2 rounded-md bg-slate-800 p-1 text-sm">
+          <button type="button" className={`rounded px-3 py-2 ${mode === 'login' ? 'bg-blue-600 text-white' : 'text-slate-300'}`} onClick={() => setMode('login')}>Login</button>
+          <button type="button" className={`rounded px-3 py-2 ${mode === 'register' ? 'bg-blue-600 text-white' : 'text-slate-300'}`} onClick={() => setMode('register')}>Register</button>
+        </div>
+        {mode === 'register' && (
+          <>
+            <label className="text-sm font-medium">Name</label>
+            <input className="input mt-2 mb-3" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
+          </>
+        )}
+        <label className="text-sm font-medium">Email</label>
+        <input className="input mt-2 mb-3" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
         <label className="text-sm font-medium">{t.password}</label>
-        <input className="input mt-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoFocus />
+        <input className="input mt-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+        {mode === 'register' && (
+          <>
+            <label className="mt-3 block text-sm font-medium">Activation code</label>
+            <input className="input mt-2 uppercase" value={activationCode} onChange={(event) => setActivationCode(event.target.value)} autoComplete="one-time-code" />
+          </>
+        )}
         {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
-        <button className="btn-primary mt-5 w-full" disabled={loading}>{loading ? t.checking : t.login}</button>
+        <button className="btn-primary mt-5 w-full" disabled={loading}>{loading ? t.checking : mode === 'register' ? 'Create account' : t.login}</button>
       </form>
     </main>
   );
@@ -588,7 +610,8 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
   const rtl = language === 'ar';
-  const [loggedIn, setLoggedIn] = useState(hasSession());
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [query, setQuery] = useState('');
@@ -661,10 +684,17 @@ export default function App() {
   }, [dark, language, rtl]);
 
   useEffect(() => {
-    if (loggedIn) {
-      ensureAdminPassword().then(load).catch((err) => setMessage(err.message));
-    }
-  }, [loggedIn]);
+    return watchAuth((nextUser) => {
+      setUser(nextUser);
+      setAuthReady(true);
+      if (nextUser) {
+        setActiveUserId(nextUser.uid);
+        load().catch((err) => setMessage(err.message));
+      } else {
+        setActiveUserId('');
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const draft = localStorage.getItem('dr123_appointment_draft');
@@ -672,12 +702,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!loggedIn) return;
+    if (!user) return;
     const payload = JSON.stringify({ savedAt: nowIso(), editing: editingAppointment, form: appointmentForm });
     localStorage.setItem('dr123_appointment_draft', payload);
     const timer = window.setInterval(() => localStorage.setItem('dr123_appointment_draft', payload), 4000);
     return () => window.clearInterval(timer);
-  }, [appointmentForm, editingAppointment, loggedIn]);
+  }, [appointmentForm, editingAppointment, user]);
 
   const selectedPatient = patients.find((item) => item.patientId === selectedPatientId);
   const backup: ClinicBackup = useMemo(
@@ -812,7 +842,7 @@ export default function App() {
 
   async function deleteCategory(category: ServiceCategory) {
     if (!confirm(`${t.deleteCategory}: ${category.name}?`)) return;
-    await deleteDoc(doc(db, 'service_categories', category.id));
+    await deleteDoc(scopedDoc('service_categories', category.id));
     await createAudit('Service category deleted', 'service', category.id, category.name);
     await load();
   }
@@ -905,12 +935,12 @@ export default function App() {
 
   async function seedData() {
     await Promise.all([
-      ...samplePatients.map((item) => setDoc(doc(db, 'patients', item.id), item)),
-      ...sampleAppointments.map((item) => setDoc(doc(db, 'appointments', item.id), item)),
-      ...samplePayments.map((item) => setDoc(doc(db, 'payments', item.id), item)),
-      ...sampleTreatments.map((item) => setDoc(doc(db, 'treatments', item.id), item)),
-      ...sampleServices.map((item) => setDoc(doc(db, 'services', item.id), item)),
-      ...sampleServiceCategories.map((item) => setDoc(doc(db, 'service_categories', item.id), item)),
+      ...samplePatients.map((item) => setDoc(scopedDoc('patients', item.id), item)),
+      ...sampleAppointments.map((item) => setDoc(scopedDoc('appointments', item.id), item)),
+      ...samplePayments.map((item) => setDoc(scopedDoc('payments', item.id), item)),
+      ...sampleTreatments.map((item) => setDoc(scopedDoc('treatments', item.id), item)),
+      ...sampleServices.map((item) => setDoc(scopedDoc('services', item.id), item)),
+      ...sampleServiceCategories.map((item) => setDoc(scopedDoc('service_categories', item.id), item)),
     ]);
     await createAudit('Sample data loaded', 'settings', 'sample-data', 'Loaded demo patients, appointments, payments, treatments, services, and categories.');
     await load();
@@ -924,8 +954,8 @@ export default function App() {
       setMessage('Password must be at least 6 characters.');
       return;
     }
-    await setDoc(doc(db, 'settings', 'adminPasswordHash'), { hash: await sha256(password), updatedAt: nowIso() });
-    await createAudit('Settings changed', 'settings', 'adminPasswordHash', 'Admin password updated.');
+    await changeCurrentPassword(password);
+    await createAudit('Settings changed', 'settings', 'account-password', 'Account password updated.');
     event.currentTarget.reset();
     setMessage('Password updated.');
     await load();
@@ -974,7 +1004,8 @@ export default function App() {
     setTab('calendar');
   }
 
-  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} t={t} />;
+  if (!authReady) return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">{t.checking}</main>;
+  if (!user) return <Login t={t} />;
 
   const nav = [
     ['dashboard', Activity, t.dashboard],
@@ -1024,7 +1055,7 @@ export default function App() {
                 <option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option>
               </select>
               <button className="btn-secondary" onClick={() => setDark(!dark)}>{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
-              <button className="btn-secondary" onClick={() => { clearSession(); setLoggedIn(false); }}><LogOut className="h-4 w-4" />{t.logout}</button>
+              <button className="btn-secondary" onClick={() => logout()}><LogOut className="h-4 w-4" />{t.logout}</button>
             </div>
           </div>
           <nav className="mt-3 flex gap-2 overflow-x-auto lg:hidden">

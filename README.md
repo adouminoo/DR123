@@ -70,13 +70,19 @@ npm run dev
 
 Open the Vite URL, usually `http://localhost:5173`.
 
-First login creates the default password:
+Users sign in with Firebase Authentication email/password accounts.
+To let a new user register, create a Firestore document before giving them the code:
 
 ```txt
-admin123
+activationCodes/DR123-EXAMPLE-001
+  createdAt: ISO string
+  usedBy: null
+  usedByEmail: null
+  usedAt: null
 ```
 
-Change it immediately in `Settings`.
+Give the document id, for example `DR123-EXAMPLE-001`, to the user as their activation code.
+After registration the app marks that code with `usedBy`, `usedByEmail`, and `usedAt`.
 
 ## Build
 
@@ -90,11 +96,19 @@ npm run preview
 Collections used by the app:
 
 ```txt
-settings/adminPasswordHash
-  hash: string
-  updatedAt: ISO string
+activationCodes/{code}
+users/{uid}
+users/{uid}/patients/{id}
+users/{uid}/appointments/{id}
+users/{uid}/payments/{id}
+users/{uid}/treatments/{id}
+users/{uid}/services/{id}
+users/{uid}/service_categories/{id}
+users/{uid}/note_timeline/{id}
+users/{uid}/audit_logs/{id}
+users/{uid}/settings/{id}
 
-patients/{id}
+users/{uid}/patients/{id}
   id: string
   patientId: PAT-0001
   name: string
@@ -203,7 +217,7 @@ Deploy included rules:
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-Important: this app intentionally uses no Firebase Auth. Firestore security rules cannot prove that a client-side password session is valid. The included `firestore.rules` are open for a private trusted deployment/demo. For real patient data, put Firestore behind Firebase Auth, App Check plus callable functions, or a backend proxy.
+Important: enable the Email/Password provider in Firebase Authentication before deploying. The included rules isolate each user's clinic data under `users/{uid}` and allow a signed-in user to consume one unused activation code. For stronger anti-abuse protection on public deployments, move code redemption into a callable Cloud Function or backend endpoint.
 
 ## Sample Test Data
 

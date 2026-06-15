@@ -2,37 +2,37 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // DR123 intentionally uses no Firebase Auth. Firestore rules cannot verify
-    // an app-only password session. These rules are suitable for a private
-    // trusted deployment or local demo only; use Firebase Auth or a backend
-    // proxy before exposing real patient data publicly.
-    match /settings/{document} {
-      allow read, write: if true;
+    function signedIn() {
+      return request.auth != null;
     }
-    match /patients/{document} {
-      allow read, write: if true;
+
+    function ownsUserDoc(userId) {
+      return signedIn() && request.auth.uid == userId;
     }
-    match /appointments/{document} {
-      allow read, write: if true;
+
+    match /activationCodes/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create, delete: if false;
+      allow update: if signedIn()
+        && resource.data.usedBy == null
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['usedBy', 'usedByEmail', 'usedAt'])
+        && request.resource.data.usedBy == request.auth.uid
+        && request.resource.data.usedByEmail == request.auth.token.email;
     }
-    match /treatments/{document} {
-      allow read, write: if true;
-    }
-    match /services/{document} {
-      allow read, write: if true;
-    }
-    match /service_categories/{document} {
-      allow read, write: if true;
-    }
-    match /note_timeline/{document} {
-      allow read, write: if true;
-    }
-    match /payments/{document} {
-      allow read, write: if true;
-    }
-    match /audit_logs/{document} {
-      allow read, create: if true;
-      allow update, delete: if false;
+
+    match /users/{userId} {
+      allow create: if ownsUserDoc(userId);
+      allow read, update, delete: if ownsUserDoc(userId);
+
+      match /{collectionName}/{document} {
+        allow read, write: if ownsUserDoc(userId) && collectionName != 'audit_logs';
+      }
+
+      match /audit_logs/{document} {
+        allow read, create: if ownsUserDoc(userId);
+        allow update, delete: if false;
+      }
     }
   }
 }

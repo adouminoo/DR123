@@ -13,6 +13,25 @@ import * as XLSX from 'xlsx';
 import { db } from './firebase';
 import type { Appointment, AuditLog, ClinicBackup, Patient, Payment, Service, ServiceCategory, TimelineNote, Treatment } from '../types/clinic';
 
+let activeUserId = '';
+
+export function setActiveUserId(userId: string) {
+  activeUserId = userId;
+}
+
+function scopedPath(collectionName: string) {
+  if (!activeUserId) throw new Error('You must be logged in before accessing clinic data.');
+  return ['users', activeUserId, collectionName] as const;
+}
+
+export function scopedCollection(collectionName: string) {
+  return collection(db, ...scopedPath(collectionName));
+}
+
+export function scopedDoc(collectionName: string, id: string) {
+  return doc(db, ...scopedPath(collectionName), id);
+}
+
 export const statuses = [
   'Scheduled',
   'Confirmed',
@@ -73,26 +92,26 @@ export function overlaps(
 }
 
 export async function getCollection<T>(name: string): Promise<T[]> {
-  const snap = await getDocs(collection(db, name));
+  const snap = await getDocs(scopedCollection(name));
   return snap.docs.map((item) => ({ id: item.id, ...item.data() }) as T);
 }
 
 export async function getSettingsBackup() {
-  const snap = await getDocs(collection(db, 'settings'));
+  const snap = await getDocs(scopedCollection('settings'));
   return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
 export async function createAudit(action: string, entity: AuditLog['entity'], entityId: string, details: string) {
-  await addDoc(collection(db, 'audit_logs'), { action, entity, entityId, details, createdAt: nowIso() });
+  await addDoc(scopedCollection('audit_logs'), { action, entity, entityId, details, createdAt: nowIso() });
 }
 
 export async function upsertPatient(patient: Patient, isNew: boolean) {
-  await setDoc(doc(db, 'patients', patient.id), patient);
+  await setDoc(scopedDoc('patients', patient.id), patient);
   await createAudit(isNew ? 'Patient created' : 'Patient edited', 'patient', patient.patientId, patient.name);
 }
 
 export async function upsertAppointment(appointment: Appointment, isNew: boolean) {
-  await setDoc(doc(db, 'appointments', appointment.id), appointment);
+  await setDoc(scopedDoc('appointments', appointment.id), appointment);
   await createAudit(
     isNew ? 'Appointment created' : 'Appointment edited',
     'appointment',
@@ -107,27 +126,27 @@ export async function removeAppointment(appointment: Appointment) {
 }
 
 export async function upsertService(service: Service, isNew: boolean) {
-  await setDoc(doc(db, 'services', service.id), service);
+  await setDoc(scopedDoc('services', service.id), service);
   await createAudit(isNew ? 'Service created' : 'Service edited', 'service', service.id, service.name);
 }
 
 export async function upsertServiceCategory(category: ServiceCategory, isNew: boolean) {
-  await setDoc(doc(db, 'service_categories', category.id), category);
+  await setDoc(scopedDoc('service_categories', category.id), category);
   await createAudit(isNew ? 'Service category created' : 'Service category edited', 'service', category.id, category.name);
 }
 
 export async function upsertTimelineNote(note: TimelineNote, isNew: boolean) {
-  await setDoc(doc(db, 'note_timeline', note.id), note);
+  await setDoc(scopedDoc('note_timeline', note.id), note);
   await createAudit(isNew ? 'Timeline note created' : 'Timeline note edited', 'note', note.patientId, note.text);
 }
 
 export async function deleteTimelineNote(note: TimelineNote) {
-  await deleteDoc(doc(db, 'note_timeline', note.id));
+  await deleteDoc(scopedDoc('note_timeline', note.id));
   await createAudit('Timeline note deleted', 'note', note.patientId, note.text);
 }
 
 export async function addPayment(payment: Payment) {
-  await setDoc(doc(db, 'payments', payment.id), payment);
+  await setDoc(scopedDoc('payments', payment.id), payment);
   await createAudit('Payment added', 'payment', payment.id, `${payment.patientName} paid ${payment.amount} DH`);
 }
 
@@ -165,20 +184,20 @@ export function exportExcel(backup: ClinicBackup) {
 
 export async function importBackup(backup: ClinicBackup) {
   const batch = writeBatch(db);
-  backup.patients?.forEach((item) => batch.set(doc(db, 'patients', item.id), item));
-  backup.appointments?.forEach((item) => batch.set(doc(db, 'appointments', item.id), item));
-  backup.payments?.forEach((item) => batch.set(doc(db, 'payments', item.id), item));
-  backup.treatments?.forEach((item: Treatment) => batch.set(doc(db, 'treatments', item.id), item));
-  backup.services?.forEach((item) => batch.set(doc(db, 'services', item.id), item));
-  backup.serviceCategories?.forEach((item) => batch.set(doc(db, 'service_categories', item.id), item));
-  backup.timelineNotes?.forEach((item) => batch.set(doc(db, 'note_timeline', item.id), item));
-  backup.auditLogs?.forEach((item) => batch.set(doc(db, 'audit_logs', item.id), item));
+  backup.patients?.forEach((item) => batch.set(scopedDoc('patients', item.id), item));
+  backup.appointments?.forEach((item) => batch.set(scopedDoc('appointments', item.id), item));
+  backup.payments?.forEach((item) => batch.set(scopedDoc('payments', item.id), item));
+  backup.treatments?.forEach((item: Treatment) => batch.set(scopedDoc('treatments', item.id), item));
+  backup.services?.forEach((item) => batch.set(scopedDoc('services', item.id), item));
+  backup.serviceCategories?.forEach((item) => batch.set(scopedDoc('service_categories', item.id), item));
+  backup.timelineNotes?.forEach((item) => batch.set(scopedDoc('note_timeline', item.id), item));
+  backup.auditLogs?.forEach((item) => batch.set(scopedDoc('audit_logs', item.id), item));
   await batch.commit();
   await createAudit('Backup imported', 'backup', `backup-${Date.now()}`, `Imported ${backup.exportedAt}`);
 }
 
 export async function patchAppointment(id: string, data: Partial<Appointment>) {
-  await updateDoc(doc(db, 'appointments', id), { ...data, updatedAt: nowIso() });
+  await updateDoc(scopedDoc('appointments', id), { ...data, updatedAt: nowIso() });
 }
 
 export async function softDelete(
@@ -188,17 +207,17 @@ export async function softDelete(
   entity: AuditLog['entity'],
   details: string,
 ) {
-  await updateDoc(doc(db, collectionName, id), { deleted: true, deletedAt: nowIso(), updatedAt: nowIso() });
+  await updateDoc(scopedDoc(collectionName, id), { deleted: true, deletedAt: nowIso(), updatedAt: nowIso() });
   await createAudit(`${entity} moved to recycle bin`, entity, entityId, details);
 }
 
 export async function restoreItem(collectionName: string, id: string, entity: AuditLog['entity'], entityId: string) {
-  await updateDoc(doc(db, collectionName, id), { deleted: false, deletedAt: '', updatedAt: nowIso() });
+  await updateDoc(scopedDoc(collectionName, id), { deleted: false, deletedAt: '', updatedAt: nowIso() });
   await createAudit(`${entity} restored`, entity, entityId, `Restored ${id}`);
 }
 
 export async function permanentlyDelete(collectionName: string, id: string, entity: AuditLog['entity'], entityId: string) {
-  await deleteDoc(doc(db, collectionName, id));
+  await deleteDoc(scopedDoc(collectionName, id));
   await createAudit(`${entity} permanently deleted`, entity, entityId, `Deleted ${id}`);
 }
 
@@ -212,6 +231,6 @@ export async function purgeOldDeleted(items: Array<{ collectionName: string; id:
 }
 
 export async function getSettingDocument(id: string) {
-  const snap = await getDoc(doc(db, 'settings', id));
+  const snap = await getDoc(scopedDoc('settings', id));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }

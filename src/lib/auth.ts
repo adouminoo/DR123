@@ -1,51 +1,72 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  updatePassword,
+  updateProfile,
+  type User,
+} from 'firebase/auth';
+import { doc, getDoc, runTransaction, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 
-const SESSION_KEY = 'dr123_session';
-const DEFAULT_PASSWORD = 'admin123';
+export type AppUser = User;
 
-export async function sha256(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value);
-  const buffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buffer))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+export function watchAuth(callback: (user: AppUser | null) => void) {
+  return onAuthStateChanged(auth, callback);
 }
 
-export async function ensureAdminPassword(): Promise<string> {
-  const ref = doc(db, 'settings', 'adminPasswordHash');
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    return String(snap.data().hash || '');
+export async function loginWithPassword(email: string, password: string) {
+  const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+  return credential.user;
+}
+
+export async function registerWithActivationCode(name: string, email: string, password: string, activationCode: string) {
+  const code = activationCode.trim().toUpperCase();
+  if (!code) throw new Error('Activation code is required.');
+
+  const codeRef = doc(db, 'activationCodes', code);
+  const codeSnap = await getDoc(codeRef);
+  if (!codeSnap.exists() || codeSnap.data().usedBy) {
+    throw new Error('Activation code is invalid or already used.');
   }
 
-  const hash = await sha256(DEFAULT_PASSWORD);
-  await setDoc(ref, {
-    hash,
-    updatedAt: new Date().toISOString(),
-    note: 'Default password is admin123. Change it in Settings immediately.',
-  });
-  return hash;
-}
+  const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+  if (name.trim()) {
+    await updateProfile(credential.user, { displayName: name.trim() });
+  }
 
-export async function verifyPassword(password: string): Promise<boolean> {
-  const storedHash = await ensureAdminPassword();
-  const inputHash = await sha256(password);
-  return inputHash === storedHash;
-}
-
-export function rememberSession() {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ loggedIn: true, at: new Date().toISOString() }));
-}
-
-export function hasSession() {
   try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || '{}').loggedIn === true;
-  } catch {
-    return false;
+    await runTransaction(db, async (transaction) => {
+      const freshCode = await transaction.get(codeRef);
+      if (!freshCode.exists() || freshCode.data().usedBy) {
+        throw new Error('Activation code is invalid or already used.');
+      }
+      transaction.update(codeRef, {
+        usedBy: credential.user.uid,
+        usedByEmail: credential.user.email,
+        usedAt: new Date().toISOString(),
+      });
+      transaction.set(doc(db, 'users', credential.user.uid), {
+        name: name.trim(),
+        email: credential.user.email,
+        activationCode: code,
+        createdAt: new Date().toISOString(),
+      });
+    });
+  } catch (error) {
+    await signOut(auth);
+    throw error;
   }
+
+  return credential.user;
 }
 
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+export async function logout() {
+  await signOut(auth);
+}
+
+export async function changeCurrentPassword(password: string) {
+  if (!auth.currentUser) throw new Error('You must be logged in to change your password.');
+  await updatePassword(auth.currentUser, password);
 }

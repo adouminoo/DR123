@@ -56,7 +56,7 @@ Required variables:
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=dr123-efedd.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=dr123-efedd
-VITE_FIREBASE_STORAGE_BUCKET=dr123-efedd.appspot.com
+VITE_FIREBASE_STORAGE_BUCKET=dr123-efedd.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
@@ -260,6 +260,17 @@ backup-2026-06-13.json
 4. In GitHub repo settings, enable Pages with source `GitHub Actions`.
 5. The included workflow `.github/workflows/pages.yml` builds and deploys `dist`.
 
+Create these GitHub repository secrets before deploying:
+
+```txt
+VITE_FIREBASE_API_KEY=AIzaSyArkFw6ERT-XZ7VG1FXv7cPMwb6u-EZiu8
+VITE_FIREBASE_AUTH_DOMAIN=dr123-efedd.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=dr123-efedd
+VITE_FIREBASE_STORAGE_BUCKET=dr123-efedd.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=1017456632024
+VITE_FIREBASE_APP_ID=1:1017456632024:web:271a0daa82ad23637fb7ad
+```
+
 The deployed site must be served from the GitHub Actions artifact, not from the source branch root. If the live HTML contains `/src/main.tsx`, GitHub Pages is serving the unbuilt repository source instead of the Vite output. Set **Settings -> Pages -> Build and deployment -> Source** to **GitHub Actions**.
 
 The Pages build is verified by:
@@ -269,7 +280,7 @@ npm run build:pages
 npm run verify:pages
 ```
 
-The verifier checks that `dist/index.html` references `/DR123/assets/...`, does not contain `/src/main.tsx`, does not contain unresolved `%BASE_URL%`, and includes `toplinkyou-logo.png`.
+The verifier checks that `dist/index.html` references `/DR123/assets/...`, does not contain `/src/main.tsx`, does not contain unresolved `%BASE_URL%`, includes `toplinkyou-logo.png`, and that the compiled JavaScript contains the required Firebase build-time values instead of fallback placeholders.
 
 Manual deploy with `gh-pages`:
 

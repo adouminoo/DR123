@@ -27,6 +27,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { changeCurrentPassword, loginWithPassword, logout, registerWithActivationCode, watchAuth, type AppUser } from './lib/auth';
+import { clearSavedLicense, getSavedLicenseKey, validateLicenseKey, type LicenseRecord } from './lib/license';
 import {
   addPayment,
   createAudit,
@@ -594,6 +595,49 @@ function Login({ t }: { t: Record<string, string> }) {
   );
 }
 
+function LicenseGate({ onValid }: { onValid: (license: LicenseRecord) => void }) {
+  const [licenseKey, setLicenseKey] = useState(getSavedLicenseKey());
+  const [checking, setChecking] = useState(Boolean(getSavedLicenseKey()));
+  const [error, setError] = useState('');
+
+  async function validate(key = licenseKey) {
+    setChecking(true);
+    setError('');
+    try {
+      onValid(await validateLicenseKey(key));
+    } catch (err) {
+      clearSavedLicense();
+      setError(err instanceof Error ? err.message : 'License validation failed.');
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  useEffect(() => {
+    const saved = getSavedLicenseKey();
+    if (saved) validate(saved);
+  }, []);
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
+      <form onSubmit={(event) => { event.preventDefault(); validate(); }} className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <div className="mb-6">
+          <p className="text-sm font-semibold uppercase tracking-widest text-blue-300">License required</p>
+          <div className="mt-4 flex items-center gap-3">
+            <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-16 w-16 rounded-full object-contain bg-white p-1" />
+            <h1 className="text-3xl font-bold">{APP_NAME}</h1>
+          </div>
+          <p className="mt-2 text-sm text-slate-300">Enter your DR123 license key to continue to account login.</p>
+        </div>
+        <label className="text-sm font-medium">License key</label>
+        <input className="input mt-2 uppercase" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} autoFocus />
+        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        <button className="btn-primary mt-5 w-full" disabled={checking}>{checking ? 'Checking...' : 'Continue'}</button>
+      </form>
+    </main>
+  );
+}
+
 function StatCard({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Activity }) {
   return (
     <div className="card p-4">
@@ -610,6 +654,7 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
   const rtl = language === 'ar';
+  const [validLicense, setValidLicense] = useState<LicenseRecord | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
@@ -684,6 +729,12 @@ export default function App() {
   }, [dark, language, rtl]);
 
   useEffect(() => {
+    if (!validLicense) {
+      setUser(null);
+      setAuthReady(false);
+      return;
+    }
+
     return watchAuth((nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
@@ -694,7 +745,7 @@ export default function App() {
         setActiveUserId('');
       }
     });
-  }, []);
+  }, [validLicense]);
 
   useEffect(() => {
     const draft = localStorage.getItem('dr123_appointment_draft');
@@ -1004,6 +1055,7 @@ export default function App() {
     setTab('calendar');
   }
 
+  if (!validLicense) return <LicenseGate onValid={setValidLicense} />;
   if (!authReady) return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">{t.checking}</main>;
   if (!user) return <Login t={t} />;
 

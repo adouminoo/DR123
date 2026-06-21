@@ -4,9 +4,9 @@ Top Management You is a complete single-doctor clinic management web app built w
 
 ## Features
 
-- Password login without Firebase Auth
-- SHA-256 password hash stored at `settings/adminPasswordHash`
-- Remembered browser session and logout
+- License key gate before account login
+- Firebase Auth email/password account login and logout
+- Per-account clinic data under `users/{uid}`
 - English, French, and Arabic UI translations
 - Arabic automatically switches the app to RTL layout
 - Dark mode and responsive mobile/desktop layout
@@ -70,6 +70,8 @@ npm run dev
 
 Open the Vite URL, usually `http://localhost:5173`.
 
+The public DR123 app asks for a license key first. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`.
+
 Users sign in with Firebase Authentication email/password accounts.
 To let a new user register, create a Firestore document before giving them the code:
 
@@ -97,6 +99,8 @@ Collections used by the app:
 
 ```txt
 activationCodes/{code}
+admins/{uid}
+licenses/{key}
 users/{uid}
 users/{uid}/patients/{id}
 users/{uid}/appointments/{id}
@@ -107,6 +111,22 @@ users/{uid}/service_categories/{id}
 users/{uid}/note_timeline/{id}
 users/{uid}/audit_logs/{id}
 users/{uid}/settings/{id}
+
+licenses/{key}
+  id: string
+  key: string
+  type: trial | full
+  status: unused | active | expired | revoked
+  createdAt: ISO string
+  activatedAt: ISO string
+  expiresAt: ISO string
+  clinicName: string
+  contactPhone: string
+  deviceId: string
+  lastCheckedAt: ISO string
+
+admins/{uid}
+  Create one document whose id is the Firebase Auth uid of the owner account.
 
 users/{uid}/patients/{id}
   id: string
@@ -217,7 +237,58 @@ Deploy included rules:
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-Important: enable the Email/Password provider in Firebase Authentication before deploying. The included rules isolate each user's clinic data under `users/{uid}` and allow a signed-in user to consume one unused activation code. For stronger anti-abuse protection on public deployments, move code redemption into a callable Cloud Function or backend endpoint.
+Important: enable the Email/Password provider in Firebase Authentication before deploying. The included rules isolate each user's clinic data under `users/{uid}`, allow public validation of specific `licenses/{key}` documents, and allow license administration only for Firebase users listed in `admins/{uid}`.
+
+To grant owner access to the private desktop admin app:
+
+1. Create or choose your owner Firebase Auth account.
+2. Copy that account's Firebase Auth `uid`.
+3. In Firestore, create `admins/{uid}` using that uid as the document id.
+
+The public customer app contains only license validation code. License generation and management live only in `license-admin`.
+
+## DR123 License Admin
+
+`license-admin` is a separate private React + Vite + TypeScript + Electron desktop app for the app owner. It connects to the same `dr123-efedd` Firebase project and manages the top-level `licenses` collection.
+
+Features:
+
+- Firebase Auth owner login
+- Generate 3-day, 7-day, and 14-day trial keys
+- Generate full lifetime keys
+- Bulk generate keys
+- Copy keys to clipboard
+- Export visible keys to CSV
+- View, search, revoke, extend, and reset device binding
+- Status counters for active, unused, expired, and revoked licenses
+
+Build a Windows installer:
+
+```powershell
+cd license-admin
+npm install
+$env:VITE_FIREBASE_API_KEY="AIzaSyArkFw6ERT-XZ7VG1FXv7cPMwb6u-EZiu8"
+$env:VITE_FIREBASE_AUTH_DOMAIN="dr123-efedd.firebaseapp.com"
+$env:VITE_FIREBASE_PROJECT_ID="dr123-efedd"
+$env:VITE_FIREBASE_STORAGE_BUCKET="dr123-efedd.firebasestorage.app"
+$env:VITE_FIREBASE_MESSAGING_SENDER_ID="1017456632024"
+$env:VITE_FIREBASE_APP_ID="1:1017456632024:web:271a0daa82ad23637fb7ad"
+npm run dist:win
+```
+
+The Windows `.exe` installer is created under:
+
+```txt
+license-admin/release/
+```
+
+For local desktop development:
+
+```bash
+cd license-admin
+npm install
+npm run dev
+```
 
 ## Sample Test Data
 

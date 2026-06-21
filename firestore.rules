@@ -10,6 +10,30 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function publicLicenseUpdate() {
+      return resource.data.status in ['unused', 'active']
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'activatedAt', 'deviceId', 'lastCheckedAt'])
+        && request.resource.data.status in ['active', 'expired']
+        && request.resource.data.deviceId is string
+        && request.resource.data.lastCheckedAt is string;
+    }
+
+    match /admins/{adminId} {
+      allow read: if signedIn() && request.auth.uid == adminId;
+      allow write: if false;
+    }
+
+    match /licenses/{licenseId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || publicLicenseUpdate();
+    }
+
     match /activationCodes/{code} {
       allow get: if true;
       allow list: if false;

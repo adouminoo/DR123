@@ -2,3 +2,5 @@ node_modules
 dist
 .env.local
 .npm-cache
+license-admin/release
+license-admin/dist-electron

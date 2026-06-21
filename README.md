@@ -251,6 +251,8 @@ The public customer app contains only license validation code. License generatio
 
 `license-admin` is a separate private React + Vite + TypeScript + Electron desktop app for the app owner. It connects to the same `dr123-efedd` Firebase project and manages the top-level `licenses` collection.
 
+The desktop app bundles the DR123 Firebase web configuration in `license-admin/src/firebaseConfig.ts` so packaged `.exe` builds do not depend on shell environment variables being present at runtime. `VITE_FIREBASE_*` variables are still supported as build-time overrides. If any required config value is missing, the app shows `Firebase configuration missing` before attempting Firebase Auth.
+
 Features:
 
 - Firebase Auth owner login

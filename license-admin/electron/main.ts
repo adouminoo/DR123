@@ -1,7 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
 function createWindow() {
@@ -12,7 +15,7 @@ function createWindow() {
     minHeight: 720,
     title: 'DR123 License Admin',
     webPreferences: {
-      preload: join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -26,7 +29,7 @@ function createWindow() {
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     window.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    window.loadFile(join(__dirname, '../../dist/index.html'));
+    window.loadFile(path.join(__dirname, '../../dist/index.html'));
   }
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
 import { collection, doc, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Copy, Download, KeyRound, LogOut, RotateCcw, Search, ShieldAlert, TimerReset } from 'lucide-react';
-import { auth, db } from './firebase';
+import { auth, db, firebaseConfig, firebaseConfigurationError, missingFirebaseConfigKeys } from './firebase';
 import type { LicenseRecord, LicenseStatus, LicenseType } from './types';
 
 const statusLabels: LicenseStatus[] = ['unused', 'active', 'expired', 'revoked'];
@@ -85,6 +85,21 @@ function Login() {
   );
 }
 
+function FirebaseConfigError() {
+  return (
+    <main className="login-shell">
+      <section className="login-card">
+        <div className="brand-mark"><ShieldAlert size={34} /></div>
+        <h1>Firebase configuration missing</h1>
+        <p>DR123 License Admin cannot start because required Firebase configuration values are missing.</p>
+        <div className="error">
+          Missing: {missingFirebaseConfigKeys.join(', ') || 'unknown'}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -99,10 +114,13 @@ export default function App() {
   const [clinicName, setClinicName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
 
-  useEffect(() => onAuthStateChanged(auth, (next) => {
-    setUser(next);
-    setAuthReady(true);
-  }), []);
+  useEffect(() => {
+    if (firebaseConfigurationError) return undefined;
+    return onAuthStateChanged(auth, (next) => {
+      setUser(next);
+      setAuthReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -192,6 +210,7 @@ export default function App() {
     await updateDoc(doc(db, 'licenses', license.id), { deviceId: '', activatedAt: '', status: 'unused', lastCheckedAt: nowIso() });
   }
 
+  if (firebaseConfigurationError) return <FirebaseConfigError />;
   if (!authReady) return <main className="login-shell">Loading...</main>;
   if (!user) return <Login />;
 
@@ -200,7 +219,7 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>DR123 License Admin</h1>
-          <p>Connected to Firebase project <b>dr123-efedd</b></p>
+          <p>Connected to Firebase project <b>{firebaseConfig.projectId}</b></p>
         </div>
         <button className="ghost" onClick={() => signOut(auth)}><LogOut size={16} /> Sign out</button>
       </header>

@@ -45,6 +45,63 @@ export function clearSavedLicense() {
   localStorage.removeItem(LICENSE_KEY_STORAGE);
 }
 
+export async function activateLicenseForUser(input: string, user: { uid: string; name: string; email: string | null }): Promise<LicenseRecord> {
+  const key = normalizeLicenseKey(input);
+  if (!key) throw new Error('Enter a license key.');
+
+  const deviceId = getDeviceId();
+  const ref = doc(db, 'licenses', key);
+  const userRef = doc(db, 'users', user.uid);
+
+  const license = await runTransaction(db, async (transaction) => {
+    const fresh = await transaction.get(ref);
+    if (!fresh.exists()) throw new Error('License key is invalid.');
+    const data = fresh.data() as LicenseRecord;
+    if (data.status === 'revoked') throw new Error('License key has been revoked.');
+    if (data.status === 'expired' || isExpired(data.expiresAt)) {
+      throw new Error('License key has expired.');
+    }
+    if (data.deviceId && data.deviceId !== deviceId) {
+      throw new Error('License key is already active on another device.');
+    }
+
+    const now = new Date().toISOString();
+    const nextLicense = {
+      ...data,
+      id: fresh.id,
+      key: data.key || key,
+      status: data.status === 'unused' ? 'active' : data.status,
+      activatedAt: data.activatedAt || now,
+      deviceId,
+      lastCheckedAt: now,
+    } as LicenseRecord;
+
+    transaction.update(ref, {
+      status: nextLicense.status,
+      activatedAt: nextLicense.activatedAt,
+      deviceId,
+      lastCheckedAt: now,
+    });
+    transaction.set(userRef, {
+      name: user.name,
+      email: user.email,
+      licenseKey: nextLicense.key,
+      licenseId: nextLicense.id,
+      createdAt: now,
+    });
+
+    return nextLicense;
+  });
+
+  try {
+    localStorage.setItem(LICENSE_KEY_STORAGE, key);
+  } catch {
+    // Local persistence is helpful but should not invalidate a committed registration.
+  }
+
+  return license;
+}
+
 export async function validateLicenseKey(input: string): Promise<LicenseRecord> {
   const key = normalizeLicenseKey(input);
   if (!key) throw new Error('Enter a license key.');

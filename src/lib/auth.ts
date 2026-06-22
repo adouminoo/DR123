@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -7,8 +8,8 @@ import {
   updateProfile,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, runTransaction, setDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth } from './firebase';
+import { activateLicenseForUser } from './license';
 
 export type AppUser = User;
 
@@ -21,40 +22,21 @@ export async function loginWithPassword(email: string, password: string) {
   return credential.user;
 }
 
-export async function registerWithActivationCode(name: string, email: string, password: string, activationCode: string) {
-  const code = activationCode.trim().toUpperCase();
-  if (!code) throw new Error('Activation code is required.');
-
-  const codeRef = doc(db, 'activationCodes', code);
-  const codeSnap = await getDoc(codeRef);
-  if (!codeSnap.exists() || codeSnap.data().usedBy) {
-    throw new Error('Activation code is invalid or already used.');
-  }
+export async function registerWithLicenseKey(name: string, email: string, password: string, licenseKey: string) {
+  if (!licenseKey.trim()) throw new Error('Enter a license key.');
 
   const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-  if (name.trim()) {
-    await updateProfile(credential.user, { displayName: name.trim() });
-  }
-
   try {
-    await runTransaction(db, async (transaction) => {
-      const freshCode = await transaction.get(codeRef);
-      if (!freshCode.exists() || freshCode.data().usedBy) {
-        throw new Error('Activation code is invalid or already used.');
-      }
-      transaction.update(codeRef, {
-        usedBy: credential.user.uid,
-        usedByEmail: credential.user.email,
-        usedAt: new Date().toISOString(),
-      });
-      transaction.set(doc(db, 'users', credential.user.uid), {
-        name: name.trim(),
-        email: credential.user.email,
-        activationCode: code,
-        createdAt: new Date().toISOString(),
-      });
+    if (name.trim()) {
+      await updateProfile(credential.user, { displayName: name.trim() });
+    }
+    await activateLicenseForUser(licenseKey, {
+      uid: credential.user.uid,
+      name: name.trim(),
+      email: credential.user.email,
     });
   } catch (error) {
+    await deleteUser(credential.user).catch(() => undefined);
     await signOut(auth);
     throw error;
   }

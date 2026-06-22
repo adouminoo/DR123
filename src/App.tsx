@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -11,14 +11,18 @@ import {
   Activity,
   Archive,
   CalendarDays,
+  CheckCircle2,
   Database,
   Download,
+  KeyRound,
   Languages,
+  LockKeyhole,
   LogOut,
   Moon,
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   Stethoscope,
   Sun,
   Trash2,
@@ -26,8 +30,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react';
-import { changeCurrentPassword, loginWithPassword, logout, registerWithActivationCode, watchAuth, type AppUser } from './lib/auth';
-import { clearSavedLicense, getSavedLicenseKey, validateLicenseKey, type LicenseRecord } from './lib/license';
+import { changeCurrentPassword, loginWithPassword, logout, registerWithLicenseKey, watchAuth, type AppUser } from './lib/auth';
 import {
   addPayment,
   createAudit,
@@ -531,12 +534,67 @@ function eventColor(status: AppointmentStatus) {
   }[status];
 }
 
-function Login({ t }: { t: Record<string, string> }) {
+function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
+  const isLicense = variant === 'license';
+
+  return (
+    <section className={`auth-visual ${isLicense ? 'auth-visual-license' : ''}`}>
+      <div className="auth-visual-topline">
+        <div className="auth-mark">DR123</div>
+        <span>{isLicense ? 'License security layer' : 'Clinic command workspace'}</span>
+      </div>
+      <div className="auth-hero-copy">
+        <p className="auth-kicker">{isLicense ? 'Protected registration' : 'Premium clinic operations'}</p>
+        <h2>{isLicense ? 'Verify access before the workspace opens.' : 'A secure command center for modern clinics.'}</h2>
+        <p>{isLicense ? 'License status, device trust, and account access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, patient data confidence, and daily clinic control.'}</p>
+      </div>
+      <div className="auth-art" aria-hidden="true">
+        <div className="auth-art-grid" />
+        <div className="auth-security-core">
+          {isLicense ? <KeyRound className="h-9 w-9" /> : <ShieldCheck className="h-9 w-9" />}
+        </div>
+        <div className="auth-fragment auth-fragment-a">
+          <span />
+          <strong>{isLicense ? 'License key' : 'Today queue'}</strong>
+          <i />
+          <i />
+        </div>
+        <div className="auth-fragment auth-fragment-b">
+          <span />
+          <strong>{isLicense ? 'Device binding' : 'Patient timeline'}</strong>
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="auth-fragment auth-fragment-c">
+          <span />
+          <strong>{isLicense ? 'Access granted' : 'Audit ready'}</strong>
+          <i />
+          <i />
+        </div>
+      </div>
+      <div className="auth-proof-row">
+        <span><ShieldCheck className="h-4 w-4" /> Encrypted access</span>
+        <span><LockKeyhole className="h-4 w-4" /> Private workspace</span>
+      </div>
+    </section>
+  );
+}
+
+function Login({
+  t,
+  onRegistrationComplete,
+  onRegistrationPending,
+}: {
+  t: Record<string, string>;
+  onRegistrationComplete: (user: AppUser) => void;
+  onRegistrationPending: (pending: boolean) => void;
+}) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [activationCode, setActivationCode] = useState('');
+  const [licenseKey, setLicenseKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -544,108 +602,91 @@ function Login({ t }: { t: Record<string, string> }) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    const isRegistering = mode === 'register';
     try {
-      if (mode === 'register') {
-        await registerWithActivationCode(name, email, password, activationCode);
+      if (isRegistering) {
+        onRegistrationPending(true);
+        const registeredUser = await registerWithLicenseKey(name, email, password, licenseKey);
+        onRegistrationComplete(registeredUser);
       } else {
         await loginWithPassword(email, password);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not verify account.');
     } finally {
+      if (isRegistering) onRegistrationPending(false);
       setLoading(false);
     }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
-      <form onSubmit={submit} className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <div className="mb-6">
-          <p className="text-sm font-semibold uppercase tracking-widest text-blue-300">{t.singleDoctor}</p>
-          <div className="mt-4 flex items-center gap-3">
-            <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-16 w-16 rounded-full object-contain bg-white p-1" />
-            <h1 className="text-3xl font-bold">{APP_NAME}</h1>
+    <main className="auth-shell">
+      <div className="auth-layout">
+        <AuthVisual variant={mode === 'register' ? 'license' : 'account'} />
+      <form onSubmit={submit} className="auth-card">
+        <div>
+          <p className="auth-eyebrow">{t.singleDoctor}</p>
+          <div className="auth-brand-row mt-4">
+            <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="auth-logo" />
+            <div>
+              <h1 className="auth-title">{APP_NAME}</h1>
+              <p className="text-sm font-medium text-slate-300">DR123 account access</p>
+            </div>
           </div>
-          <p className="mt-2 text-sm text-slate-300">Login to your account, or register once with an activation code from the clinic owner.</p>
+          <p className="auth-copy">Existing users can login with email and password. New users register once with a valid license key.</p>
+          <div className="auth-trust">
+            <span><ShieldCheck className="h-4 w-4 text-cyan-200" /> Licensed workspace</span>
+            <span><LockKeyhole className="h-4 w-4 text-cyan-200" /> Protected account access</span>
+          </div>
         </div>
-        <div className="mb-5 grid grid-cols-2 rounded-md bg-slate-800 p-1 text-sm">
-          <button type="button" className={`rounded px-3 py-2 ${mode === 'login' ? 'bg-blue-600 text-white' : 'text-slate-300'}`} onClick={() => setMode('login')}>Login</button>
-          <button type="button" className={`rounded px-3 py-2 ${mode === 'register' ? 'bg-blue-600 text-white' : 'text-slate-300'}`} onClick={() => setMode('register')}>Register</button>
+        <div className="auth-tabs">
+          <button type="button" className={`auth-tab ${mode === 'login' ? 'auth-tab-active' : ''}`} onClick={() => setMode('login')}>Login</button>
+          <button type="button" className={`auth-tab ${mode === 'register' ? 'auth-tab-active' : ''}`} onClick={() => setMode('register')}>Register</button>
         </div>
         {mode === 'register' && (
           <>
-            <label className="text-sm font-medium">Name</label>
+            <label className="auth-label">Name</label>
             <input className="input mt-2 mb-3" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
           </>
         )}
-        <label className="text-sm font-medium">Email</label>
+        <label className="auth-label">Email</label>
         <input className="input mt-2 mb-3" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
-        <label className="text-sm font-medium">{t.password}</label>
+        <label className="auth-label">{t.password}</label>
         <input className="input mt-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         {mode === 'register' && (
           <>
-            <label className="mt-3 block text-sm font-medium">Activation code</label>
-            <input className="input mt-2 uppercase" value={activationCode} onChange={(event) => setActivationCode(event.target.value)} autoComplete="one-time-code" />
+            <label className="auth-label">License key</label>
+            <div className="auth-license-field">
+              <KeyRound className="h-4 w-4 text-cyan-200" />
+              <input className="input uppercase tracking-wide" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} autoComplete="one-time-code" />
+            </div>
           </>
         )}
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
-        <button className="btn-primary mt-5 w-full" disabled={loading}>{loading ? t.checking : mode === 'register' ? 'Create account' : t.login}</button>
+        {error && <p className="auth-alert">{error}</p>}
+        <button className="btn-primary mt-6 w-full" disabled={loading}>{loading ? t.checking : mode === 'register' ? 'Create account' : t.login}</button>
+        <p className="auth-footer-note">Need access? Contact your DR123 license owner.</p>
       </form>
-    </main>
-  );
-}
-
-function LicenseGate({ onValid }: { onValid: (license: LicenseRecord) => void }) {
-  const [licenseKey, setLicenseKey] = useState(getSavedLicenseKey());
-  const [checking, setChecking] = useState(Boolean(getSavedLicenseKey()));
-  const [error, setError] = useState('');
-
-  async function validate(key = licenseKey) {
-    setChecking(true);
-    setError('');
-    try {
-      onValid(await validateLicenseKey(key));
-    } catch (err) {
-      clearSavedLicense();
-      setError(err instanceof Error ? err.message : 'License validation failed.');
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  useEffect(() => {
-    const saved = getSavedLicenseKey();
-    if (saved) validate(saved);
-  }, []);
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
-      <form onSubmit={(event) => { event.preventDefault(); validate(); }} className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <div className="mb-6">
-          <p className="text-sm font-semibold uppercase tracking-widest text-blue-300">License required</p>
-          <div className="mt-4 flex items-center gap-3">
-            <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-16 w-16 rounded-full object-contain bg-white p-1" />
-            <h1 className="text-3xl font-bold">{APP_NAME}</h1>
-          </div>
-          <p className="mt-2 text-sm text-slate-300">Enter your DR123 license key to continue to account login.</p>
-        </div>
-        <label className="text-sm font-medium">License key</label>
-        <input className="input mt-2 uppercase" value={licenseKey} onChange={(event) => setLicenseKey(event.target.value)} autoFocus />
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
-        <button className="btn-primary mt-5 w-full" disabled={checking}>{checking ? 'Checking...' : 'Continue'}</button>
-      </form>
-    </main>
-  );
-}
-
-function StatCard({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Activity }) {
-  return (
-    <div className="card p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-        <Icon className="h-5 w-5 text-brand-600" />
       </div>
-      <p className="mt-3 text-2xl font-bold text-slate-950 dark:text-white">{value}</p>
+    </main>
+  );
+}
+
+function StatCard({ label, value, icon: Icon, detail, tone = 'default', featured = false }: { label: string; value: string; icon: typeof Activity; detail?: string; tone?: 'default' | 'success' | 'warning' | 'neutral'; featured?: boolean }) {
+  const toneClass = {
+    default: 'metric-icon',
+    success: 'metric-icon metric-icon-success',
+    warning: 'metric-icon metric-icon-warning',
+    neutral: 'metric-icon metric-icon-neutral',
+  }[tone];
+
+  return (
+    <div className={`metric-card ${featured ? 'metric-card-featured' : ''}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{label}</p>
+        <span className={toneClass}><Icon className="h-5 w-5" /></span>
+      </div>
+      <p className="mt-4 text-2xl font-bold tracking-normal text-slate-950 dark:text-white">{value}</p>
+      {detail && <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{detail}</p>}
     </div>
   );
 }
@@ -654,9 +695,9 @@ export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
   const rtl = language === 'ar';
-  const [validLicense, setValidLicense] = useState<LicenseRecord | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const registrationPendingRef = useRef(false);
   const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [query, setQuery] = useState('');
@@ -720,6 +761,12 @@ export default function App() {
     ]);
   }
 
+  function openAppForUser(nextUser: AppUser) {
+    setUser(nextUser);
+    setActiveUserId(nextUser.uid);
+    load().catch((err) => setMessage(err.message));
+  }
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
     document.documentElement.dir = rtl ? 'rtl' : 'ltr';
@@ -729,23 +776,19 @@ export default function App() {
   }, [dark, language, rtl]);
 
   useEffect(() => {
-    if (!validLicense) {
-      setUser(null);
-      setAuthReady(false);
-      return;
-    }
-
     return watchAuth((nextUser) => {
-      setUser(nextUser);
       setAuthReady(true);
+      if (nextUser && registrationPendingRef.current) {
+        return;
+      }
       if (nextUser) {
-        setActiveUserId(nextUser.uid);
-        load().catch((err) => setMessage(err.message));
+        openAppForUser(nextUser);
       } else {
+        setUser(null);
         setActiveUserId('');
       }
     });
-  }, [validLicense]);
+  }, []);
 
   useEffect(() => {
     const draft = localStorage.getItem('dr123_appointment_draft');
@@ -1055,89 +1098,123 @@ export default function App() {
     setTab('calendar');
   }
 
-  if (!validLicense) return <LicenseGate onValid={setValidLicense} />;
-  if (!authReady) return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">{t.checking}</main>;
-  if (!user) return <Login t={t} />;
+  if (!authReady) return <main className="auth-shell"><div className="auth-card text-center">{t.checking}</div></main>;
+  if (!user) {
+    return (
+      <Login
+        t={t}
+        onRegistrationPending={(pending) => {
+          registrationPendingRef.current = pending;
+        }}
+        onRegistrationComplete={(registeredUser) => {
+          registrationPendingRef.current = false;
+          setAuthReady(true);
+          openAppForUser(registeredUser);
+        }}
+      />
+    );
+  }
 
-  const nav = [
-    ['dashboard', Activity, t.dashboard],
-    ['calendar', CalendarDays, t.calendar],
-    ['patients', Users, t.patients],
-    ['services', Stethoscope, t.services],
-    ['waiting', Users, t.waiting],
-    ['revenue', WalletCards, t.revenue],
-    ['stats', Activity, t.stats],
-    ['backup', Database, t.backup],
-    ['recycle', Archive, t.recycle],
-    ['audit', Database, t.audit],
-    ['settings', Settings, t.settings],
-  ] as const;
+  const navGroups: Array<{ label: string; items: Array<[Tab, typeof Activity, string]> }> = [
+    { label: 'Command', items: [['dashboard', Activity, t.dashboard], ['calendar', CalendarDays, t.calendar], ['waiting', Users, t.waiting]] },
+    { label: 'Clinic data', items: [['patients', Users, t.patients], ['services', Stethoscope, t.services]] },
+    { label: 'Business', items: [['revenue', WalletCards, t.revenue], ['stats', Activity, t.stats]] },
+    { label: 'System', items: [['backup', Database, t.backup], ['recycle', Archive, t.recycle], ['audit', Database, t.audit], ['settings', Settings, t.settings]] },
+  ];
+  const nav = navGroups.flatMap((group) => group.items);
+  const todayAppointments = appointments.filter((item) => item.date === todayIso()).sort((a, b) => a.time.localeCompare(b.time));
+  const upcomingDashboardAppointments = appointments.filter((item) => dateInRange(item.date, 7)).slice(0, 8);
+  const outstandingDashboardAppointments = appointments.filter((item) => !item.paid && item.revenueAmount > 0).slice(0, 8);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100" dir={rtl ? 'rtl' : 'ltr'}>
-      <aside className={`fixed inset-y-0 z-20 hidden w-64 border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 lg:block ${rtl ? 'right-0 border-l' : 'left-0 border-r'}`}>
+    <div className="app-page" dir={rtl ? 'rtl' : 'ltr'}>
+      <aside className={`app-sidebar ${rtl ? 'right-0 border-l' : 'left-0 border-r'}`}>
         <div className="flex items-center gap-3">
-          <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-12 w-12 rounded-full object-contain bg-white p-1" />
-          <h1 className="text-xl font-bold leading-tight">{APP_NAME}</h1>
+          <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-12 w-12 rounded-lg border border-slate-200 bg-white object-contain p-1.5 shadow-soft" />
+          <div>
+            <h1 className="text-lg font-bold leading-tight tracking-normal">{APP_NAME}</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">DR123</p>
+          </div>
         </div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{t.clinicManagement}</p>
-        <nav className="mt-6 space-y-1">
-          {nav.map(([key, Icon, label]) => (
-            <button key={key} onClick={() => setTab(key)} className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium ${tab === key ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
-              <Icon className="h-4 w-4" />{label}
-            </button>
+        <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{t.clinicManagement}</p>
+        <nav className="mt-6 space-y-5">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="nav-group-label">{group.label}</p>
+              <div className="mt-2 space-y-1">
+                {group.items.map(([key, Icon, label]) => (
+                  <button key={key} onClick={() => setTab(key)} className={`nav-item ${tab === key ? 'nav-item-active' : ''}`}>
+                    <Icon className="h-4 w-4" />{label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <p className="absolute bottom-4 left-4 right-4 text-center text-xs text-slate-400 dark:text-slate-500">{FOOTER_CREDIT}</p>
       </aside>
 
       <div className={rtl ? 'lg:pr-64' : 'lg:pl-64'}>
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+        <header className="app-header">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-widest text-brand-600">{t.singleDoctor}</p>
-              <h2 className="text-xl font-bold">{nav.find(([key]) => key === tab)?.[2]}</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">{t.singleDoctor}</p>
+              <h2 className="text-2xl font-bold tracking-normal text-slate-950 dark:text-white">{nav.find(([key]) => key === tab)?.[2]}</h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-64 flex-1">
-                <Search className={`absolute top-2.5 h-4 w-4 text-slate-400 ${rtl ? 'right-3' : 'left-3'}`} />
+              <div className="relative min-w-full flex-1 sm:min-w-64">
+                <Search className={`absolute top-3 h-4 w-4 text-slate-400 ${rtl ? 'right-3' : 'left-3'}`} />
                 <input className={`input ${rtl ? 'pr-9' : 'pl-9'}`} placeholder={t.search} value={query} onChange={(event) => setQuery(event.target.value)} />
               </div>
-              <select className="input w-auto" value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t.language}>
+              <label className="relative">
+                <Languages className={`pointer-events-none absolute top-3 h-4 w-4 text-slate-400 ${rtl ? 'right-3' : 'left-3'}`} />
+                <select className={`input w-auto min-w-36 ${rtl ? 'pr-9' : 'pl-9'}`} value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t.language}>
                 <option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option>
-              </select>
-              <button className="btn-secondary" onClick={() => setDark(!dark)}>{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
+                </select>
+              </label>
+              <button className="btn-secondary" onClick={() => setDark(!dark)} aria-label="Toggle theme">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
               <button className="btn-secondary" onClick={() => logout()}><LogOut className="h-4 w-4" />{t.logout}</button>
             </div>
           </div>
           <nav className="mt-3 flex gap-2 overflow-x-auto lg:hidden">
-            {nav.map(([key, Icon, label]) => <button key={key} className={`btn ${tab === key ? 'bg-brand-600 text-white' : 'bg-slate-100 dark:bg-slate-800'}`} onClick={() => setTab(key)}><Icon className="h-4 w-4" />{label}</button>)}
+            {nav.map(([key, Icon, label]) => <button key={key} className={`btn shrink-0 ${tab === key ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200'}`} onClick={() => setTab(key)}><Icon className="h-4 w-4" />{label}</button>)}
           </nav>
         </header>
 
-        <main className="space-y-6 p-4 md:p-6">
-          {message && <button className="card w-full p-3 text-left text-sm text-brand-700 dark:text-blue-300" onClick={() => setMessage('')}>{message}</button>}
-          {draftPrompt && <div className="card flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{t.restoreDraft}</span><div className="flex gap-2"><button className="btn-primary" onClick={restoreDraft}>{t.restore}</button><button className="btn-secondary" onClick={() => { localStorage.removeItem('dr123_appointment_draft'); setDraftPrompt(false); }}>{t.discard}</button></div></div>}
+        <main className="space-y-6 p-4 md:p-6 xl:p-8">
+          {message && <button className="surface w-full p-3 text-left text-sm font-medium text-brand-700 dark:text-blue-300" onClick={() => setMessage('')}>{message}</button>}
+          {draftPrompt && <div className="surface flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{t.restoreDraft}</span><div className="flex gap-2"><button className="btn-primary" onClick={restoreDraft}>{t.restore}</button><button className="btn-secondary" onClick={() => { localStorage.removeItem('dr123_appointment_draft'); setDraftPrompt(false); }}>{t.discard}</button></div></div>}
 
           {tab === 'dashboard' && (
             <>
-              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <StatCard label={t.todayRevenue} value={formatMad(revenue.today)} icon={WalletCards} />
-                <StatCard label={t.weekRevenue} value={formatMad(revenue.week)} icon={WalletCards} />
-                <StatCard label={t.monthRevenue} value={formatMad(revenue.month)} icon={WalletCards} />
-                <StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} />
-                <StatCard label={t.patients} value={String(patients.length)} icon={Users} />
+              <section className="dashboard-hero">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">{t.dashboard}</p>
+                  <h3 className="mt-2 text-2xl font-bold tracking-normal text-slate-950 dark:text-white">Clinic command center</h3>
+                  <p className="section-subtitle">Today's revenue, patient flow, and follow-up work in one focused view.</p>
+                </div>
+                <div className="dashboard-hero-meta">
+                  <span>{new Date().toLocaleDateString()}</span>
+                  <span>{todayAppointments.length} {t.todaysQueue}</span>
+                </div>
               </section>
-              <section className="grid gap-4 xl:grid-cols-[1fr_340px]">
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                <StatCard label={t.todayRevenue} value={formatMad(revenue.today)} icon={WalletCards} detail="Paid today" tone="success" featured />
+                <StatCard label={t.weekRevenue} value={formatMad(revenue.week)} icon={WalletCards} detail="Current week" />
+                <StatCard label={t.monthRevenue} value={formatMad(revenue.month)} icon={WalletCards} detail="Current month" />
+                <StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} detail="Open balance" tone="warning" />
+                <StatCard label={t.patients} value={String(patients.length)} icon={Users} detail="Active records" tone="neutral" />
+              </section>
+              <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
                 <div className="space-y-4">
                   <QuickAdd t={t} quickInput={quickInput} setQuickInput={setQuickInput} onSubmit={quickCreateAppointment} onBackup={createBackup} lastBackup={lastBackup} />
-                  <TodayQueue t={t} appointments={appointments.filter((item) => item.date === todayIso()).sort((a, b) => a.time.localeCompare(b.time))} onStatus={updateAppointmentStatus} />
+                  <TodayQueue t={t} appointments={todayAppointments} onStatus={updateAppointmentStatus} />
                 </div>
                 <RecentPatients t={t} recentPatients={recentPatients} patients={patients} openPatient={(patient) => { openPatient(patient); setTab('patients'); }} />
               </section>
               <section className="grid gap-4 xl:grid-cols-2">
-                <div className="card p-4"><h3 className="font-semibold">{t.upcoming}</h3><AppointmentList t={t} appointments={appointments.filter((item) => dateInRange(item.date, 7)).slice(0, 8)} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></div>
-                <div className="card p-4"><h3 className="font-semibold">{t.outstandingPayments}</h3><AppointmentList t={t} appointments={appointments.filter((item) => !item.paid && item.revenueAmount > 0).slice(0, 8)} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></div>
+                <div className="dashboard-panel"><div className="panel-heading"><div><h3 className="section-title">{t.upcoming}</h3><p className="section-subtitle">Next 7 days</p></div><span className="badge-info">{upcomingDashboardAppointments.length}</span></div><AppointmentList t={t} appointments={upcomingDashboardAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></div>
+                <div className="dashboard-panel"><div className="panel-heading"><div><h3 className="section-title">{t.outstandingPayments}</h3><p className="section-subtitle">Payments needing follow-up</p></div><span className="badge-warning">{outstandingDashboardAppointments.length}</span></div><AppointmentList t={t} appointments={outstandingDashboardAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></div>
               </section>
             </>
           )}
@@ -1171,10 +1248,10 @@ export default function App() {
 
           {tab === 'backup' && (
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <button className="card p-5 text-left" onClick={exportJson}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportJson}</button>
-              <button className="card p-5 text-left" onClick={exportCsv}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportCsv}</button>
-              <button className="card p-5 text-left" onClick={() => exportExcel(backup)}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportExcel}</button>
-              <label className="card cursor-pointer p-5 text-left"><Upload className="mb-3 h-5 w-5 text-brand-600" />{t.importBackup}<input className="hidden" type="file" accept="application/json" onChange={(event) => handleImport(event.target.files?.[0])} /></label>
+              <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={exportJson}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportJson}</button>
+              <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={exportCsv}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportCsv}</button>
+              <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={() => exportExcel(backup)}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportExcel}</button>
+              <label className="card cursor-pointer p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift"><Upload className="mb-3 h-5 w-5 text-brand-600" />{t.importBackup}<input className="hidden" type="file" accept="application/json" onChange={(event) => handleImport(event.target.files?.[0])} /></label>
               <button className="btn-primary md:col-span-2" onClick={seedData}>{t.loadSample}</button>
               {lastBackup && <button className="btn-secondary md:col-span-2" onClick={() => downloadFile(`backup-${lastBackup.at.slice(0, 10)}.json`, lastBackup.content, 'application/json')}>{t.downloadBackup}</button>}
             </section>
@@ -1186,13 +1263,13 @@ export default function App() {
 
           {tab === 'settings' && (
             <section className="card max-w-xl p-5">
-              <h3 className="text-lg font-semibold">{t.adminPassword}</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Stored as SHA-256 at settings/adminPasswordHash.</p>
+              <h3 className="section-title">{t.adminPassword}</h3>
+              <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
               <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
             </section>
           )}
 
-          {query && !['patients', 'recycle'].includes(tab) && <section className="card p-4"><h3 className="font-semibold">{t.searchResults}</h3><AppointmentList t={t} appointments={filteredAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></section>}
+          {query && !['patients', 'recycle'].includes(tab) && <section className="card p-4"><h3 className="section-title">{t.searchResults}</h3><AppointmentList t={t} appointments={filteredAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></section>}
           <footer className="pb-2 pt-4 text-center text-xs text-slate-500 dark:text-slate-500 lg:hidden">{FOOTER_CREDIT}</footer>
         </main>
       </div>
@@ -1202,15 +1279,22 @@ export default function App() {
 
 function QuickAdd({ t, quickInput, setQuickInput, onSubmit, onBackup, lastBackup }: { t: Record<string, string>; quickInput: string; setQuickInput: (value: string) => void; onSubmit: (event: React.FormEvent) => void; onBackup: () => void; lastBackup: { at: string; content: string } | null }) {
   return (
-    <div className="card p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="command-panel">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">{t.quickAdd}</h3>
+          <p className="section-subtitle">Create fast appointments without leaving the command center.</p>
+        </div>
+        <span className="badge-info">{t.create}</span>
+      </div>
+      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <form className="flex flex-1 flex-col gap-2 sm:flex-row" onSubmit={onSubmit}>
-          <label className="flex-1 text-sm font-medium">{t.quickAdd}<input className="input mt-1" value={quickInput} onChange={(event) => setQuickInput(event.target.value)} placeholder={t.quickPlaceholder} /></label>
+          <label className="flex-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Appointment request<input className="input mt-2" value={quickInput} onChange={(event) => setQuickInput(event.target.value)} placeholder={t.quickPlaceholder} /></label>
           <button className="btn-primary self-end">{t.create}</button>
         </form>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <button className="btn-secondary" onClick={onBackup}><Download className="h-4 w-4" />{t.createBackup}</button>
-          <span className="text-slate-500">{lastBackup ? `${t.lastBackupDate}: ${new Date(lastBackup.at).toLocaleDateString()} · ${t.lastBackupTime}: ${new Date(lastBackup.at).toLocaleTimeString()}` : t.noBackup}</span>
+          <span className="backup-pill">{lastBackup ? `${t.lastBackupDate}: ${new Date(lastBackup.at).toLocaleDateString()} · ${t.lastBackupTime}: ${new Date(lastBackup.at).toLocaleTimeString()}` : t.noBackup}</span>
         </div>
       </div>
     </div>
@@ -1218,12 +1302,20 @@ function QuickAdd({ t, quickInput, setQuickInput, onSubmit, onBackup, lastBackup
 }
 
 function TodayQueue({ t, appointments, onStatus }: { t: Record<string, string>; appointments: Appointment[]; onStatus: (appointment: Appointment, status: AppointmentStatus) => void }) {
+  const activeCount = appointments.filter((item) => !['Completed', 'Cancelled', 'No Show'].includes(item.status)).length;
+
   return (
-    <div className="card p-4">
-      <h3 className="font-semibold">{t.todaysQueue}</h3>
-      <div className="mt-3 divide-y divide-slate-200 dark:divide-slate-800">
-        {appointments.length === 0 && <p className="py-3 text-sm text-slate-500">{t.noAppointments}</p>}
-        {appointments.map((item) => <div key={item.id} className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"><div><b>{item.time}</b> {item.patientName}<p className="text-sm text-slate-500">{tStatus(item.status, t)}</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={() => onStatus(item, 'Arrived')}>{t.arrived}</button><button className="btn-secondary" onClick={() => onStatus(item, 'In Consultation')}>{t.inConsultation}</button><button className="btn-secondary" onClick={() => onStatus(item, 'Completed')}>{t.completed}</button></div></div>)}
+    <div className="dashboard-panel">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">{t.todaysQueue}</h3>
+          <p className="section-subtitle">{activeCount} active today</p>
+        </div>
+        <span className="badge-info">{appointments.length}</span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {appointments.length === 0 && <p className="empty-state empty-state-polished mt-3"><CalendarDays className="h-5 w-5" />No appointments scheduled today.</p>}
+        {appointments.map((item) => <div key={item.id} className="queue-row"><div className="queue-time">{item.time}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-slate-950 dark:text-white">{item.patientName}</span><span className="badge-info">{tStatus(item.status, t)}</span></div><p className="mt-1 truncate text-sm text-slate-500">{item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={() => onStatus(item, 'Arrived')}>{t.arrived}</button><button className="btn-secondary" onClick={() => onStatus(item, 'In Consultation')}>{t.inConsultation}</button><button className="btn-secondary" onClick={() => onStatus(item, 'Completed')}>{t.completed}</button></div></div>)}
       </div>
     </div>
   );
@@ -1231,14 +1323,20 @@ function TodayQueue({ t, appointments, onStatus }: { t: Record<string, string>; 
 
 function RecentPatients({ t, recentPatients, patients, openPatient }: { t: Record<string, string>; recentPatients: RecentPatient[]; patients: Patient[]; openPatient: (patient: Patient) => void }) {
   return (
-    <div className="card p-4">
-      <h3 className="font-semibold">{t.recentPatients}</h3>
+    <div className="dashboard-panel h-full">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">{t.recentPatients}</h3>
+          <p className="section-subtitle">Recently opened records</p>
+        </div>
+        <span className="badge-info">{recentPatients.length}</span>
+      </div>
       <div className="mt-3 space-y-2">
         {recentPatients.map((recent) => {
           const patient = patients.find((item) => item.patientId === recent.patientId);
-          return <button key={recent.patientId} className="w-full rounded-md border border-slate-200 p-3 text-left text-sm hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800" onClick={() => patient && openPatient(patient)}><b>{recent.name}</b><br /><span className="text-slate-500">{new Date(recent.openedAt).toLocaleString()}</span></button>;
+          return <button key={recent.patientId} className="recent-patient-row" onClick={() => patient && openPatient(patient)}><span className="patient-avatar">{recent.name.slice(0, 1).toUpperCase()}</span><span className="min-w-0"><b className="block truncate text-slate-950 dark:text-white">{recent.name}</b><span className="text-slate-500">{new Date(recent.openedAt).toLocaleString()}</span></span></button>;
         })}
-        {recentPatients.length === 0 && <p className="text-sm text-slate-500">{t.noData}</p>}
+        {recentPatients.length === 0 && <p className="empty-state empty-state-polished"><Users className="h-5 w-5" />{t.noData}</p>}
       </div>
     </div>
   );
@@ -1247,7 +1345,7 @@ function RecentPatients({ t, recentPatients, patients, openPatient }: { t: Recor
 function PatientForm({ t, form, setForm, editing, onSubmit, onReset }: { t: Record<string, string>; form: Patient; setForm: (form: Patient) => void; editing: boolean; onSubmit: (event: React.FormEvent) => void; onReset: () => void }) {
   return (
     <form className="card space-y-3 p-4" onSubmit={onSubmit}>
-      <h3 className="font-semibold">{editing ? t.editPatient : t.newPatient}</h3>
+      <h3 className="section-title">{editing ? t.editPatient : t.newPatient}</h3>
       <input className="input" placeholder={t.name} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
       <input className="input" placeholder={t.phone} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
       <div className="grid grid-cols-2 gap-3"><input className="input" type="number" placeholder={t.age} value={form.age || ''} onChange={(e) => setForm({ ...form, age: Number(e.target.value) })} /><select className="input" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as Patient['gender'] })}><option>Female</option><option>Male</option><option>Other</option></select></div>
@@ -1265,7 +1363,7 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
   }
   return (
     <form className="card space-y-3 p-4" onSubmit={onSubmit}>
-      <h3 className="font-semibold">{editing ? `${t.editAppointment} ${form.appointmentId}` : t.newAppointment}</h3>
+      <h3 className="section-title">{editing ? `${t.editAppointment} ${form.appointmentId}` : t.newAppointment}</h3>
       <select className="input" value={form.patientId} onChange={(e) => setForm({ ...form, patientId: e.target.value, patientName: patients.find((p) => p.patientId === e.target.value)?.name || form.patientName })} required><option value="">{t.selectPatient}</option>{patients.map((patient) => <option key={patient.id} value={patient.patientId}>{patient.patientId} - {patient.name}</option>)}</select>
       <select className="input" value={form.serviceId || ''} onChange={(e) => selectService(e.target.value)}><option value="">{t.serviceDropdown}</option>{services.filter((service) => service.active).map((service) => <option key={service.id} value={service.id}>{service.category} - {service.name}</option>)}</select>
       <div className="grid grid-cols-2 gap-3"><input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required /><input className="input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} required /></div>
@@ -1273,7 +1371,7 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
       <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AppointmentStatus })}>{statuses.map((status) => <option key={status} value={status}>{tStatus(status, t)}</option>)}</select>
       <input className="input" placeholder={t.treatment} value={form.treatmentPerformed} onChange={(e) => setForm({ ...form, treatmentPerformed: e.target.value })} />
       <div className="grid grid-cols-2 gap-3"><input className="input" type="number" min="0" placeholder="Revenue DH" value={form.revenueAmount || ''} onChange={(e) => setForm({ ...form, revenueAmount: Number(e.target.value) })} /><select className="input" value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as PaymentMethod })}>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select></div>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.checked })} />{t.paid}</label>
+      <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-800 dark:bg-slate-950"><input type="checkbox" checked={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.checked })} />{t.paid}</label>
       <textarea className="input min-h-20" placeholder={t.notes} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       <p className="text-xs text-slate-500">{t.draftSaved}</p>
       <div className="flex gap-2"><button className="btn-primary">{t.save}</button><button type="button" className="btn-secondary" onClick={onReset}>{t.clear}</button></div>
@@ -1282,7 +1380,7 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
 }
 
 function PatientsTable({ t, patients, appointments, onOpen, onDelete }: { t: Record<string, string>; patients: Patient[]; appointments: Appointment[]; onOpen: (patient: Patient) => void; onDelete: (patient: Patient) => void }) {
-  return <div className="card overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-100 text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"><tr><th className="p-3">{t.patient}</th><th className="p-3">{t.phone}</th><th className="p-3">{t.history}</th><th className="p-3"></th></tr></thead><tbody>{patients.map((patient) => <tr key={patient.id} className="border-t border-slate-200 dark:border-slate-800"><td className="p-3"><b>{patient.patientId}</b><br />{patient.name}<PatientAlerts t={t} patient={patient} appointments={appointments} /></td><td className="p-3">{patient.phone}<br /><span className="text-slate-500">{patient.age} {t.age}, {patient.gender}</span></td><td className="p-3">{appointments.filter((item) => item.patientId === patient.patientId).length} {t.calendar}<br /><span className="text-slate-500">{appointments.filter((item) => item.patientId === patient.patientId).map((item) => item.treatmentPerformed).filter(Boolean).join(', ') || t.noTreatments}</span></td><td className="p-3 text-right"><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onOpen(patient)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(patient)}>{t.delete}</button></div></td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr><th>{t.patient}</th><th>{t.phone}</th><th>{t.history}</th><th></th></tr></thead><tbody>{patients.map((patient) => <tr key={patient.id}><td><b className="text-slate-950 dark:text-white">{patient.patientId}</b><br />{patient.name}<PatientAlerts t={t} patient={patient} appointments={appointments} /></td><td>{patient.phone}<br /><span className="text-slate-500">{patient.age} {t.age}, {patient.gender}</span></td><td><span className="badge-info">{appointments.filter((item) => item.patientId === patient.patientId).length} {t.calendar}</span><br /><span className="mt-2 inline-block max-w-md text-slate-500">{appointments.filter((item) => item.patientId === patient.patientId).map((item) => item.treatmentPerformed).filter(Boolean).join(', ') || t.noTreatments}</span></td><td className="text-right"><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onOpen(patient)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(patient)}>{t.delete}</button></div></td></tr>)}</tbody></table></div>;
 }
 
 function PatientAlerts({ t, patient, appointments }: { t: Record<string, string>; patient: Patient; appointments: Appointment[] }) {
@@ -1293,32 +1391,32 @@ function PatientAlerts({ t, patient, appointments }: { t: Record<string, string>
     history.filter((item) => item.status === 'No Show').length >= 3 && t.noShowThree,
     history.some((item) => new Date(`${item.date}T${item.time}`) > new Date() && !['Cancelled', 'No Show'].includes(item.status)) && t.upcomingAppointment,
   ].filter(Boolean);
-  return <div className="mt-2 flex flex-wrap gap-1">{alerts.map((alert) => <span key={String(alert)} className="badge bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">! {alert}</span>)}</div>;
+  return <div className="mt-2 flex flex-wrap gap-1">{alerts.map((alert) => <span key={String(alert)} className="badge-warning">! {alert}</span>)}</div>;
 }
 
 function PatientProfile({ t, patient, appointments, notes, onNote, onDeleteNote }: { t: Record<string, string>; patient: Patient; appointments: Appointment[]; notes: TimelineNote[]; onNote: (text: string, existing?: TimelineNote) => void; onDeleteNote: (note: TimelineNote) => void }) {
   const [noteText, setNoteText] = useState('');
   const [editing, setEditing] = useState<TimelineNote | undefined>();
-  return <div className="card p-4"><h3 className="font-semibold">{t.patientProfile}: {patient.name}</h3><PatientAlerts t={t} patient={patient} appointments={appointments} /><p className="mt-3 text-sm text-slate-500">{patient.medicalNotes}</p><h4 className="mt-5 font-semibold">{t.medicalTimeline}</h4><form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); onNote(noteText, editing); setNoteText(''); setEditing(undefined); }}><input className="input" value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t.notes} /><button className="btn-primary">{editing ? t.save : t.addNote}</button></form><div className="mt-4 space-y-3">{notes.map((note) => <div key={note.id} className="rounded-md border border-slate-200 p-3 text-sm dark:border-slate-800"><div className="flex justify-between gap-3"><p>{new Date(note.createdAt).toLocaleDateString()} - {note.text}</p><div className="flex gap-2"><button className="text-brand-600" onClick={() => { setEditing(note); setNoteText(note.text); }}>{t.edit}</button><button className="text-red-600" onClick={() => onDeleteNote(note)}>{t.delete}</button></div></div></div>)}</div></div>;
+  return <div className="card p-4"><h3 className="section-title">{t.patientProfile}: {patient.name}</h3><PatientAlerts t={t} patient={patient} appointments={appointments} /><p className="section-subtitle">{patient.medicalNotes || t.noData}</p><h4 className="mt-5 font-semibold">{t.medicalTimeline}</h4><form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); onNote(noteText, editing); setNoteText(''); setEditing(undefined); }}><input className="input" value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t.notes} /><button className="btn-primary">{editing ? t.save : t.addNote}</button></form><div className="mt-4 space-y-3">{notes.length === 0 && <p className="empty-state">{t.noData}</p>}{notes.map((note) => <div key={note.id} className="rounded-md border border-slate-200 bg-slate-50/70 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/40"><div className="flex justify-between gap-3"><p><span className="font-semibold text-slate-700 dark:text-slate-200">{new Date(note.createdAt).toLocaleDateString()}</span> - {note.text}</p><div className="flex gap-2"><button className="text-brand-600" onClick={() => { setEditing(note); setNoteText(note.text); }}>{t.edit}</button><button className="text-red-600" onClick={() => onDeleteNote(note)}>{t.delete}</button></div></div></div>)}</div></div>;
 }
 
 function ServicesPage({ t, services, categories, serviceForm, setServiceForm, editing, onSubmit, onReset, onEdit, onDelete, categoryName, setCategoryName, onCategorySubmit, onCategoryDelete }: { t: Record<string, string>; services: Service[]; categories: ServiceCategory[]; serviceForm: Service; setServiceForm: (service: Service) => void; editing: boolean; onSubmit: (event: React.FormEvent) => void; onReset: () => void; onEdit: (service: Service) => void; onDelete: (service: Service) => void; categoryName: string; setCategoryName: (value: string) => void; onCategorySubmit: (event: React.FormEvent) => void; onCategoryDelete: (category: ServiceCategory) => void }) {
-  return <section className="grid gap-4 xl:grid-cols-[360px_1fr]"><div className="space-y-4"><form className="card space-y-3 p-4" onSubmit={onSubmit}><h3 className="font-semibold">{editing ? t.edit : t.newService}</h3><input className="input" placeholder={t.name} value={serviceForm.name} onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })} required /><select className="input" value={serviceForm.category} onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })} required><option value="">{t.category}</option>{categories.map((category) => <option key={category.id}>{category.name}</option>)}</select><input className="input" type="number" placeholder={t.defaultDuration} value={serviceForm.defaultDuration} onChange={(e) => setServiceForm({ ...serviceForm, defaultDuration: Number(e.target.value) })} /><input className="input" type="number" placeholder={t.defaultPrice} value={serviceForm.defaultPrice} onChange={(e) => setServiceForm({ ...serviceForm, defaultPrice: Number(e.target.value) })} /><textarea className="input min-h-20" placeholder={t.description} value={serviceForm.description} onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={serviceForm.active} onChange={(e) => setServiceForm({ ...serviceForm, active: e.target.checked })} />{serviceForm.active ? t.active : t.inactive}</label><div className="flex gap-2"><button className="btn-primary">{t.save}</button><button className="btn-secondary" type="button" onClick={onReset}>{t.clear}</button></div></form><div className="card p-4"><form className="flex gap-2" onSubmit={onCategorySubmit}><input className="input" placeholder={t.category} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button className="btn-primary">{t.create}</button></form><div className="mt-3 space-y-2">{categories.map((category) => <div key={category.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800"><span>{category.name}</span><button className="text-red-600" type="button" onClick={() => onCategoryDelete(category)}>{t.delete}</button></div>)}</div></div></div><div className="card overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-100 text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"><tr><th className="p-3">{t.services}</th><th className="p-3">{t.category}</th><th className="p-3">{t.defaultDuration}</th><th className="p-3">{t.defaultPrice}</th><th className="p-3"></th></tr></thead><tbody>{services.map((service) => <tr key={service.id} className="border-t border-slate-200 dark:border-slate-800"><td className="p-3"><b>{service.name}</b><br /><span className="text-slate-500">{service.description}</span></td><td className="p-3">{service.category}</td><td className="p-3">{service.defaultDuration}m</td><td className="p-3">{formatMad(service.defaultPrice)}</td><td className="p-3"><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onEdit(service)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(service)}>{t.delete}</button></div></td></tr>)}</tbody></table></div></section>;
+  return <section className="grid gap-4 xl:grid-cols-[360px_1fr]"><div className="space-y-4"><form className="card space-y-3 p-4" onSubmit={onSubmit}><h3 className="section-title">{editing ? t.edit : t.newService}</h3><input className="input" placeholder={t.name} value={serviceForm.name} onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })} required /><select className="input" value={serviceForm.category} onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })} required><option value="">{t.category}</option>{categories.map((category) => <option key={category.id}>{category.name}</option>)}</select><input className="input" type="number" placeholder={t.defaultDuration} value={serviceForm.defaultDuration} onChange={(e) => setServiceForm({ ...serviceForm, defaultDuration: Number(e.target.value) })} /><input className="input" type="number" placeholder={t.defaultPrice} value={serviceForm.defaultPrice} onChange={(e) => setServiceForm({ ...serviceForm, defaultPrice: Number(e.target.value) })} /><textarea className="input min-h-20" placeholder={t.description} value={serviceForm.description} onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })} /><label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-800 dark:bg-slate-950"><input type="checkbox" checked={serviceForm.active} onChange={(e) => setServiceForm({ ...serviceForm, active: e.target.checked })} />{serviceForm.active ? t.active : t.inactive}</label><div className="flex gap-2"><button className="btn-primary">{t.save}</button><button className="btn-secondary" type="button" onClick={onReset}>{t.clear}</button></div></form><div className="card p-4"><form className="flex gap-2" onSubmit={onCategorySubmit}><input className="input" placeholder={t.category} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button className="btn-primary">{t.create}</button></form><div className="mt-3 space-y-2">{categories.map((category) => <div key={category.id} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-950/50"><span>{category.name}</span><button className="text-red-600" type="button" onClick={() => onCategoryDelete(category)}>{t.delete}</button></div>)}</div></div></div><div className="table-wrap"><table className="data-table"><thead><tr><th>{t.services}</th><th>{t.category}</th><th>{t.defaultDuration}</th><th>{t.defaultPrice}</th><th></th></tr></thead><tbody>{services.map((service) => <tr key={service.id}><td><b className="text-slate-950 dark:text-white">{service.name}</b><br /><span className="text-slate-500">{service.description}</span></td><td><span className="badge-info">{service.category}</span></td><td>{service.defaultDuration}m</td><td>{formatMad(service.defaultPrice)}</td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onEdit(service)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(service)}>{t.delete}</button></div></td></tr>)}</tbody></table></div></section>;
 }
 
 function AppointmentList({ t, appointments, onEdit, onDelete, onCopy, whatsappLink }: { t: Record<string, string>; appointments: Appointment[]; onEdit: (item: Appointment) => void; onDelete: (item: Appointment) => void; onCopy: (item: Appointment) => void; whatsappLink: (item: Appointment) => string }) {
-  if (!appointments.length) return <p className="mt-3 text-sm text-slate-500">{t.noAppointments}</p>;
-  return <div className="mt-3 divide-y divide-slate-200 dark:divide-slate-800">{appointments.map((item) => <div key={item.id} className="flex flex-col gap-3 py-3 md:flex-row md:items-center md:justify-between"><div><p className="font-semibold">{item.appointmentId} - {item.patientName}</p><p className="text-sm text-slate-500">{item.date} {item.time} - {item.duration}m - {tStatus(item.status, t)} - {item.serviceName || item.treatmentPerformed} - {formatMad(item.revenueAmount)} - {item.paid ? t.paid : t.unpaid}</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={() => onCopy(item)}>{t.copyReminder}</button><a className="btn-secondary" href={whatsappLink(item)} target="_blank" rel="noreferrer">WhatsApp</a><button className="btn-secondary" onClick={() => onEdit(item)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(item)}>{t.delete}</button></div></div>)}</div>;
+  if (!appointments.length) return <p className="empty-state empty-state-polished mt-3"><CheckCircle2 className="h-5 w-5" />{t.noAppointments}</p>;
+  return <div className="mt-3 space-y-2">{appointments.map((item) => <div key={item.id} className="appointment-row"><div className="appointment-date"><b>{item.time}</b><span>{item.date}</span></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-950 dark:text-white">{item.appointmentId} - {item.patientName}</p><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span><span className="badge-info">{tStatus(item.status, t)}</span></div><p className="mt-1 truncate text-sm text-slate-500">{item.duration}m | {item.serviceName || item.treatmentPerformed || t.noTreatmentYet} | {formatMad(item.revenueAmount)}</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={() => onCopy(item)}>{t.copyReminder}</button><a className="btn-secondary" href={whatsappLink(item)} target="_blank" rel="noreferrer">WhatsApp</a><button className="btn-secondary" onClick={() => onEdit(item)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(item)}>{t.delete}</button></div></div>)}</div>;
 }
 
 function WaitingRoom({ t, appointments, onMove }: { t: Record<string, string>; appointments: Appointment[]; onMove: (appointment: Appointment, status: AppointmentStatus) => void }) {
   const lanes: AppointmentStatus[] = ['Confirmed', 'Arrived', 'Waiting', 'In Consultation', 'Completed'];
   const [dragged, setDragged] = useState<Appointment | null>(null);
-  return <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{lanes.map((lane) => <div key={lane} className="card min-h-80 p-3" onDragOver={(e) => e.preventDefault()} onDrop={() => dragged && onMove(dragged, lane)}><h3 className="mb-3 font-semibold">{tStatus(lane, t)}</h3>{appointments.filter((item) => item.status === lane).map((item) => <div key={item.id} draggable onDragStart={() => setDragged(item)} className="mb-3 cursor-grab rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800"><p className="font-semibold">{item.patientName}</p><p className="text-slate-500">{item.time} - {item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div>)}</div>)}</section>;
+  return <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{lanes.map((lane) => <div key={lane} className="card min-h-80 p-3" onDragOver={(e) => e.preventDefault()} onDrop={() => dragged && onMove(dragged, lane)}><h3 className="mb-3 flex items-center justify-between font-semibold"><span>{tStatus(lane, t)}</span><span className="badge-info">{appointments.filter((item) => item.status === lane).length}</span></h3>{appointments.filter((item) => item.status === lane).map((item) => <div key={item.id} draggable onDragStart={() => setDragged(item)} className="mb-3 cursor-grab rounded-md border border-slate-200 bg-slate-50 p-3 text-sm shadow-soft transition hover:border-brand-200 dark:border-slate-700 dark:bg-slate-800"><p className="font-semibold text-slate-950 dark:text-white">{item.patientName}</p><p className="text-slate-500">{item.time} - {item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div>)}</div>)}</section>;
 }
 
 function RevenuePage({ t, revenue, appointments }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[] }) {
-  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="card overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-100 text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"><tr><th className="p-3">Date</th><th className="p-3">Patient</th><th className="p-3">{t.services}</th><th className="p-3">Amount</th><th className="p-3">Method</th><th className="p-3">Status</th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id} className="border-t border-slate-200 dark:border-slate-800"><td className="p-3">{item.date}</td><td className="p-3">{item.patientName}</td><td className="p-3">{item.serviceName || item.treatmentPerformed}</td><td className="p-3">{formatMad(item.revenueAmount)}</td><td className="p-3">{item.paymentMethod}</td><td className="p-3">{item.paid ? t.paid : t.unpaid}</td></tr>)}</tbody></table></div></section>;
+  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Patient</th><th>{t.services}</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{formatMad(item.revenueAmount)}</td><td>{item.paymentMethod}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td></tr>)}</tbody></table></div></section>;
 }
 
 function Stats({ t, appointments, patients }: { t: Record<string, string>; appointments: Appointment[]; patients: Patient[] }) {
@@ -1334,14 +1432,14 @@ function Stats({ t, appointments, patients }: { t: Record<string, string>; appoi
 
 function Chart({ title, rows, money = false }: { title: string; rows: [string, number][]; money?: boolean }) {
   const max = Math.max(1, ...rows.map(([, value]) => value));
-  return <div className="card p-4"><h3 className="font-semibold">{title}</h3><div className="mt-4 space-y-3">{rows.length === 0 && <p className="text-sm text-slate-500">No data yet.</p>}{rows.map(([label, value]) => <div key={label}><div className="mb-1 flex justify-between text-sm"><span>{label}</span><span>{money ? formatMad(value) : value}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div>;
+  return <div className="card p-4"><h3 className="section-title">{title}</h3><div className="mt-4 space-y-3">{rows.length === 0 && <p className="empty-state">No data yet.</p>}{rows.map(([label, value]) => <div key={label}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate">{label}</span><span className="font-semibold">{money ? formatMad(value) : value}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div>;
 }
 
 function RecycleBin({ t, query, items, onRestore, onDelete }: { t: Record<string, string>; query: string; items: DeletedItem[]; onRestore: (item: DeletedItem) => void; onDelete: (item: DeletedItem) => void }) {
   const filtered = items.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()) || item.entityId.toLowerCase().includes(query.toLowerCase()));
-  return <div className="card overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-100 text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"><tr><th className="p-3">{t.recycle}</th><th className="p-3">{t.deletedDate}</th><th className="p-3"></th></tr></thead><tbody>{filtered.map((item) => <tr key={`${item.collectionName}-${item.id}`} className="border-t border-slate-200 dark:border-slate-800"><td className="p-3"><b>{item.entityId}</b><br />{item.label}</td><td className="p-3">{item.deletedAt ? new Date(item.deletedAt).toLocaleString() : ''}</td><td className="p-3"><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onRestore(item)}>{t.restore}</button><button className="btn-secondary" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" />{t.permanentDelete}</button></div></td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr><th>{t.recycle}</th><th>{t.deletedDate}</th><th></th></tr></thead><tbody>{filtered.map((item) => <tr key={`${item.collectionName}-${item.id}`}><td><b className="text-slate-950 dark:text-white">{item.entityId}</b><br />{item.label}</td><td>{item.deletedAt ? new Date(item.deletedAt).toLocaleString() : ''}</td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onRestore(item)}>{t.restore}</button><button className="btn-danger" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" />{t.permanentDelete}</button></div></td></tr>)}</tbody></table></div>;
 }
 
 function AuditTable({ auditLogs }: { auditLogs: AuditLog[] }) {
-  return <div className="card overflow-hidden"><table className="w-full text-left text-sm"><thead className="bg-slate-100 text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400"><tr><th className="p-3">When</th><th className="p-3">Action</th><th className="p-3">Entity</th><th className="p-3">Details</th></tr></thead><tbody>{auditLogs.map((log) => <tr key={log.id} className="border-t border-slate-200 dark:border-slate-800"><td className="p-3">{new Date(log.createdAt).toLocaleString()}</td><td className="p-3">{log.action}</td><td className="p-3">{log.entityId}</td><td className="p-3">{log.details}</td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead><tbody>{auditLogs.map((log) => <tr key={log.id}><td>{new Date(log.createdAt).toLocaleString()}</td><td><span className="badge-info">{log.action}</span></td><td>{log.entityId}</td><td>{log.details}</td></tr>)}</tbody></table></div>;
 }

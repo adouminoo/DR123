@@ -49,6 +49,8 @@ import {
   overlaps,
   paymentMethods,
   permanentlyDelete,
+  prepareBackupImport,
+  type PreparedBackupImport,
   purgeOldDeleted,
   restoreItem,
   scopedDoc,
@@ -64,6 +66,7 @@ import {
   upsertServiceCategory,
   upsertTimelineNote,
 } from './lib/clinic';
+import { checkRegisteredLicenseForUser, type LicenseRecord } from './lib/license';
 import { sampleAppointments, samplePatients, samplePayments, sampleServices, sampleServiceCategories, sampleTreatments } from './data/sampleData';
 import type {
   Appointment,
@@ -583,10 +586,14 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
 
 function Login({
   t,
+  authError,
+  onClearAuthError,
   onRegistrationComplete,
   onRegistrationPending,
 }: {
   t: Record<string, string>;
+  authError: string;
+  onClearAuthError: () => void;
   onRegistrationComplete: (user: AppUser) => void;
   onRegistrationPending: (pending: boolean) => void;
 }) {
@@ -598,10 +605,15 @@ function Login({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (authError) setError(authError);
+  }, [authError]);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    onClearAuthError();
     const isRegistering = mode === 'register';
     try {
       if (isRegistering) {
@@ -691,6 +703,36 @@ function StatCard({ label, value, icon: Icon, detail, tone = 'default', featured
   );
 }
 
+function LicenseStatusPanel({ license, onRefresh }: { license: LicenseRecord | null; onRefresh?: () => void }) {
+  const statusClass = license?.status === 'active' ? 'badge-success' : license?.status === 'revoked' ? 'badge-danger' : 'badge-warning';
+  const expiry = license?.expiresAt ? new Date(license.expiresAt).toLocaleDateString() : 'Lifetime';
+
+  return (
+    <aside className="license-panel">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">License status</h3>
+          <p className="section-subtitle">Current clinic access and device binding.</p>
+        </div>
+        {license && <span className={statusClass}>{license.status}</span>}
+      </div>
+      {license ? (
+        <div className="mt-4 space-y-3 text-sm">
+          <div className="license-row"><span>Type</span><b>{license.type === 'full' ? 'Full lifetime' : 'Trial'}</b></div>
+          <div className="license-row"><span>Expires</span><b>{expiry}</b></div>
+          <div className="license-row"><span>Clinic</span><b>{license.clinicName || 'Not set'}</b></div>
+          <div className="license-row"><span>Contact</span><b>{license.contactPhone || 'Not set'}</b></div>
+          <div className="license-row"><span>Last checked</span><b>{license.lastCheckedAt ? new Date(license.lastCheckedAt).toLocaleString() : 'Just now'}</b></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">{license.key}</div>
+        </div>
+      ) : (
+        <p className="empty-state mt-4">License details are unavailable.</p>
+      )}
+      {onRefresh && <button className="btn-secondary mt-4 w-full" onClick={onRefresh}>Refresh license</button>}
+    </aside>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
@@ -698,6 +740,8 @@ export default function App() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const registrationPendingRef = useRef(false);
+  const [authError, setAuthError] = useState('');
+  const [license, setLicense] = useState<LicenseRecord | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [query, setQuery] = useState('');
@@ -722,6 +766,7 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [quickInput, setQuickInput] = useState('');
   const [draftPrompt, setDraftPrompt] = useState(false);
+  const [pendingImport, setPendingImport] = useState<PreparedBackupImport | null>(null);
   const [lastBackup, setLastBackup] = useState<{ at: string; content: string } | null>(() => {
     const saved = localStorage.getItem('dr123_last_backup');
     return saved ? JSON.parse(saved) : null;
@@ -761,10 +806,21 @@ export default function App() {
     ]);
   }
 
-  function openAppForUser(nextUser: AppUser) {
-    setUser(nextUser);
-    setActiveUserId(nextUser.uid);
-    load().catch((err) => setMessage(err.message));
+  async function openAppForUser(nextUser: AppUser) {
+    try {
+      setAuthError('');
+      const activeLicense = await checkRegisteredLicenseForUser(nextUser.uid);
+      setLicense(activeLicense);
+      setUser(nextUser);
+      setActiveUserId(nextUser.uid);
+      await load();
+    } catch (err) {
+      setLicense(null);
+      setUser(null);
+      setActiveUserId('');
+      setAuthError(err instanceof Error ? err.message : 'License validation failed.');
+      await logout();
+    }
   }
 
   useEffect(() => {
@@ -782,9 +838,10 @@ export default function App() {
         return;
       }
       if (nextUser) {
-        openAppForUser(nextUser);
+        void openAppForUser(nextUser);
       } else {
         setUser(null);
+        setLicense(null);
         setActiveUserId('');
       }
     });
@@ -1076,8 +1133,22 @@ export default function App() {
 
   async function handleImport(file?: File) {
     if (!file) return;
-    const parsed = JSON.parse(await file.text()) as ClinicBackup;
-    await importBackup(parsed);
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const preview = prepareBackupImport(parsed);
+      setPendingImport(preview);
+      setMessage(`Backup ready: ${preview.totalRecords} records found. Review before importing.`);
+    } catch (err) {
+      setPendingImport(null);
+      setMessage(err instanceof Error ? err.message : 'Backup file could not be read.');
+    }
+  }
+
+  async function confirmImport() {
+    if (!pendingImport) return;
+    await importBackup(pendingImport.backup);
+    setPendingImport(null);
+    setMessage(`Imported ${pendingImport.totalRecords} backup records.`);
     await load();
   }
 
@@ -1103,13 +1174,15 @@ export default function App() {
     return (
       <Login
         t={t}
+        authError={authError}
+        onClearAuthError={() => setAuthError('')}
         onRegistrationPending={(pending) => {
           registrationPendingRef.current = pending;
         }}
         onRegistrationComplete={(registeredUser) => {
           registrationPendingRef.current = false;
           setAuthReady(true);
-          openAppForUser(registeredUser);
+          void openAppForUser(registeredUser);
         }}
       />
     );
@@ -1251,9 +1324,35 @@ export default function App() {
               <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={exportJson}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportJson}</button>
               <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={exportCsv}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportCsv}</button>
               <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={() => exportExcel(backup)}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportExcel}</button>
-              <label className="card cursor-pointer p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift"><Upload className="mb-3 h-5 w-5 text-brand-600" />{t.importBackup}<input className="hidden" type="file" accept="application/json" onChange={(event) => handleImport(event.target.files?.[0])} /></label>
+              <label className="card cursor-pointer p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift"><Upload className="mb-3 h-5 w-5 text-brand-600" />{t.importBackup}<input className="hidden" type="file" accept="application/json" onChange={(event) => { handleImport(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label>
               <button className="btn-primary md:col-span-2" onClick={seedData}>{t.loadSample}</button>
               {lastBackup && <button className="btn-secondary md:col-span-2" onClick={() => downloadFile(`backup-${lastBackup.at.slice(0, 10)}.json`, lastBackup.content, 'application/json')}>{t.downloadBackup}</button>}
+              {pendingImport && (
+                <section className="backup-preview md:col-span-2 xl:col-span-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">Import preview</p>
+                    <h3 className="section-title mt-1">{pendingImport.totalRecords} records ready to import</h3>
+                    <p className="section-subtitle">Review the backup contents before writing them to this clinic account.</p>
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {pendingImport.summary.filter((item) => item.count > 0).map((item) => (
+                      <div key={item.key} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-950/50">
+                        <span className="text-slate-500 dark:text-slate-400">{item.label}</span>
+                        <b className="float-right text-slate-950 dark:text-white">{item.count}</b>
+                      </div>
+                    ))}
+                  </div>
+                  {pendingImport.warnings.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {pendingImport.warnings.map((warning) => <p key={warning} className="badge-warning">{warning}</p>)}
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button className="btn-primary" onClick={confirmImport}>Import backup</button>
+                    <button className="btn-secondary" onClick={() => setPendingImport(null)}>Cancel</button>
+                  </div>
+                </section>
+              )}
             </section>
           )}
 
@@ -1262,10 +1361,13 @@ export default function App() {
           {tab === 'audit' && <AuditTable auditLogs={auditLogs} />}
 
           {tab === 'settings' && (
-            <section className="card max-w-xl p-5">
-              <h3 className="section-title">{t.adminPassword}</h3>
-              <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
-              <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
+            <section className="grid max-w-5xl gap-4 lg:grid-cols-[1fr_360px]">
+              <div className="card p-5">
+                <h3 className="section-title">{t.adminPassword}</h3>
+                <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
+                <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
+              </div>
+              <LicenseStatusPanel license={license} onRefresh={user ? () => openAppForUser(user) : undefined} />
             </section>
           )}
 

@@ -45,6 +45,23 @@ export function clearSavedLicense() {
   localStorage.removeItem(LICENSE_KEY_STORAGE);
 }
 
+function licenseFromSnapshot(id: string, data: unknown): LicenseRecord {
+  return { ...(data as LicenseRecord), id };
+}
+
+function assertUsableLicense(license: LicenseRecord, deviceId: string) {
+  if (license.status === 'revoked') throw new Error('License key has been revoked.');
+  if (license.status === 'expired' || isExpired(license.expiresAt)) {
+    throw new Error('License key has expired.');
+  }
+  if (license.status !== 'active') {
+    throw new Error('License key is not active.');
+  }
+  if (license.deviceId && license.deviceId !== deviceId) {
+    throw new Error('License key is already active on another device.');
+  }
+}
+
 export async function activateLicenseForUser(input: string, user: { uid: string; name: string; email: string | null }): Promise<LicenseRecord> {
   const key = normalizeLicenseKey(input);
   if (!key) throw new Error('Enter a license key.');
@@ -99,6 +116,31 @@ export async function activateLicenseForUser(input: string, user: { uid: string;
     // Local persistence is helpful but should not invalidate a committed registration.
   }
 
+  return license;
+}
+
+export async function checkRegisteredLicenseForUser(uid: string): Promise<LicenseRecord> {
+  const userSnap = await getDoc(doc(db, 'users', uid));
+  if (!userSnap.exists()) throw new Error('License registration missing.');
+
+  const userData = userSnap.data() as { licenseKey?: string; licenseId?: string };
+  const key = normalizeLicenseKey(userData.licenseKey || userData.licenseId || getSavedLicenseKey());
+  if (!key) throw new Error('License registration missing.');
+
+  const deviceId = getDeviceId();
+  const ref = doc(db, 'licenses', key);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('License key is invalid.');
+
+  const license = licenseFromSnapshot(snap.id, snap.data());
+  if (license.status !== 'expired' && isExpired(license.expiresAt)) {
+    await updateDoc(ref, { status: 'expired', lastCheckedAt: new Date().toISOString() });
+    throw new Error('License key has expired.');
+  }
+
+  assertUsableLicense(license, deviceId);
+  await updateDoc(ref, { lastCheckedAt: new Date().toISOString() });
+  localStorage.setItem(LICENSE_KEY_STORAGE, key);
   return license;
 }
 

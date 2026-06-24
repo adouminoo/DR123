@@ -15,6 +15,33 @@ import type { Appointment, AuditLog, ClinicBackup, Patient, Payment, Service, Se
 
 let activeUserId = '';
 
+type BackupArrayKey = Exclude<keyof ClinicBackup, 'exportedAt'>;
+
+const backupCollections: Array<{ key: BackupArrayKey; label: string; collectionName: string }> = [
+  { key: 'patients', label: 'Patients', collectionName: 'patients' },
+  { key: 'appointments', label: 'Appointments', collectionName: 'appointments' },
+  { key: 'payments', label: 'Payments', collectionName: 'payments' },
+  { key: 'treatments', label: 'Treatments', collectionName: 'treatments' },
+  { key: 'services', label: 'Services', collectionName: 'services' },
+  { key: 'serviceCategories', label: 'Service categories', collectionName: 'service_categories' },
+  { key: 'settings', label: 'Settings', collectionName: 'settings' },
+  { key: 'timelineNotes', label: 'Timeline notes', collectionName: 'note_timeline' },
+  { key: 'auditLogs', label: 'Audit logs', collectionName: 'audit_logs' },
+];
+
+export type BackupImportSummary = {
+  key: BackupArrayKey;
+  label: string;
+  count: number;
+};
+
+export type PreparedBackupImport = {
+  backup: ClinicBackup;
+  summary: BackupImportSummary[];
+  totalRecords: number;
+  warnings: string[];
+};
+
 export function setActiveUserId(userId: string) {
   activeUserId = userId;
 }
@@ -171,6 +198,45 @@ export function toCsv(rows: Record<string, unknown>[]) {
   return [headers.join(','), ...rows.map((row) => headers.map((header) => escape(row[header])).join(','))].join('\n');
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readBackupArray(input: Record<string, unknown>, key: BackupArrayKey, label: string) {
+  const value = input[key];
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array.`);
+  value.forEach((item, index) => {
+    if (!isRecord(item) || typeof item.id !== 'string' || !item.id.trim()) {
+      throw new Error(`${label} item ${index + 1} is missing a valid id.`);
+    }
+  });
+  return value as Record<string, unknown>[];
+}
+
+export function prepareBackupImport(input: unknown): PreparedBackupImport {
+  if (!isRecord(input)) throw new Error('Backup file is not a valid DR123 backup.');
+
+  const warnings: string[] = [];
+  const backup = {
+    exportedAt: typeof input.exportedAt === 'string' ? input.exportedAt : '',
+  } as ClinicBackup;
+
+  if (!backup.exportedAt) warnings.push('Backup exportedAt is missing; import can continue.');
+
+  const summary = backupCollections.map(({ key, label }) => {
+    const rows = readBackupArray(input, key, label);
+    (backup as unknown as Record<BackupArrayKey, Record<string, unknown>[]>)[key] = rows;
+    return { key, label, count: rows.length };
+  });
+
+  const totalRecords = summary.reduce((total, item) => total + item.count, 0);
+  if (!totalRecords) throw new Error('Backup file does not contain any importable records.');
+  if (totalRecords > 450) warnings.push('Large backup detected; records will be imported in multiple Firestore batches.');
+
+  return { backup, summary, totalRecords, warnings };
+}
+
 export function exportExcel(backup: ClinicBackup) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(backup.patients), 'Patients');
@@ -183,16 +249,19 @@ export function exportExcel(backup: ClinicBackup) {
 }
 
 export async function importBackup(backup: ClinicBackup) {
-  const batch = writeBatch(db);
-  backup.patients?.forEach((item) => batch.set(scopedDoc('patients', item.id), item));
-  backup.appointments?.forEach((item) => batch.set(scopedDoc('appointments', item.id), item));
-  backup.payments?.forEach((item) => batch.set(scopedDoc('payments', item.id), item));
-  backup.treatments?.forEach((item: Treatment) => batch.set(scopedDoc('treatments', item.id), item));
-  backup.services?.forEach((item) => batch.set(scopedDoc('services', item.id), item));
-  backup.serviceCategories?.forEach((item) => batch.set(scopedDoc('service_categories', item.id), item));
-  backup.timelineNotes?.forEach((item) => batch.set(scopedDoc('note_timeline', item.id), item));
-  backup.auditLogs?.forEach((item) => batch.set(scopedDoc('audit_logs', item.id), item));
-  await batch.commit();
+  const writes = backupCollections.flatMap(({ key, collectionName }) => {
+    const rows = (backup[key] || []) as Array<Record<string, unknown> & { id: string }>;
+    return rows.map((item) => ({ collectionName, item }));
+  });
+
+  for (let index = 0; index < writes.length; index += 450) {
+    const batch = writeBatch(db);
+    writes.slice(index, index + 450).forEach(({ collectionName, item }) => {
+      batch.set(scopedDoc(collectionName, item.id), item);
+    });
+    await batch.commit();
+  }
+
   await createAudit('Backup imported', 'backup', `backup-${Date.now()}`, `Imported ${backup.exportedAt}`);
 }
 

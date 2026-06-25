@@ -250,7 +250,7 @@ Features:
 - Bulk generate keys
 - Copy keys to clipboard
 - Export visible keys to CSV
-- View, search, revoke, extend, and reset device binding
+- View, search, group by customer, revoke, extend, convert trial to full, and reset device binding
 - Status counters for active, unused, expired, and revoked licenses
 
 Build a Windows installer:

@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
 import { collection, doc, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { Copy, Download, KeyRound, LogOut, RotateCcw, Search, ShieldAlert, TimerReset } from 'lucide-react';
+import { Building2, Copy, Download, KeyRound, LogOut, RotateCcw, Search, ShieldAlert, TimerReset } from 'lucide-react';
 import { auth, db, firebaseConfig, firebaseConfigurationError, missingFirebaseConfigKeys } from './firebase';
 import type { LicenseRecord, LicenseStatus, LicenseType } from './types';
 
 const statusLabels: LicenseStatus[] = ['unused', 'active', 'expired', 'revoked'];
+
+type CustomerGroup = {
+  key: string;
+  clinicName: string;
+  contactPhone: string;
+  licenses: LicenseRecord[];
+  active: number;
+  trials: number;
+  expired: number;
+  revoked: number;
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -29,6 +40,10 @@ function computedStatus(license: LicenseRecord): LicenseStatus {
   if (license.status === 'revoked') return 'revoked';
   if (license.expiresAt && new Date(license.expiresAt).getTime() <= Date.now()) return 'expired';
   return license.status;
+}
+
+function customerKey(license: Pick<LicenseRecord, 'clinicName' | 'contactPhone'>) {
+  return `${license.clinicName?.trim() || 'Unassigned clinic'}|${license.contactPhone?.trim() || ''}`;
 }
 
 function toCsv(rows: LicenseRecord[]) {
@@ -113,6 +128,7 @@ export default function App() {
   const [bulkCount, setBulkCount] = useState(1);
   const [clinicName, setClinicName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('all');
 
   useEffect(() => {
     if (firebaseConfigurationError) return undefined;
@@ -138,8 +154,35 @@ export default function App() {
     return licenses
       .map((license) => ({ ...license, status: computedStatus(license) }))
       .filter((license) => statusFilter === 'all' || license.status === statusFilter)
-      .filter((license) => !term || [license.key, license.clinicName, license.contactPhone, license.deviceId].some((value) => value.toLowerCase().includes(term)));
+      .filter((license) => !term || [license.key, license.clinicName, license.contactPhone, license.deviceId].some((value) => String(value || '').toLowerCase().includes(term)));
   }, [licenses, queryText, statusFilter]);
+
+  const customerGroups = useMemo<CustomerGroup[]>(() => {
+    const groups = new Map<string, LicenseRecord[]>();
+    filtered.forEach((license) => {
+      const key = customerKey(license);
+      groups.set(key, [...(groups.get(key) || []), license]);
+    });
+    return Array.from(groups.entries())
+      .map(([key, rows]) => {
+        const [groupName = 'Unassigned clinic', groupPhone = ''] = key.split('|');
+        return {
+          key,
+          clinicName: groupName,
+          contactPhone: groupPhone,
+          licenses: rows,
+          active: rows.filter((license) => license.status === 'active').length,
+          trials: rows.filter((license) => license.type === 'trial').length,
+          expired: rows.filter((license) => license.status === 'expired').length,
+          revoked: rows.filter((license) => license.status === 'revoked').length,
+        };
+      })
+      .sort((a, b) => b.licenses.length - a.licenses.length || a.clinicName.localeCompare(b.clinicName));
+  }, [filtered]);
+
+  const visibleLicenses = useMemo(() => (
+    customerFilter === 'all' ? filtered : filtered.filter((license) => customerKey(license) === customerFilter)
+  ), [customerFilter, filtered]);
 
   const counts = useMemo(() => statusLabels.reduce<Record<LicenseStatus, number>>((acc, status) => {
     acc[status] = licenses.filter((license) => computedStatus(license) === status).length;
@@ -183,8 +226,8 @@ export default function App() {
   }
 
   async function exportCsv() {
-    const saved = await window.licenseAdmin.saveCsv(`dr123-licenses-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(filtered));
-    if (saved) setMessage(`Exported ${filtered.length} license${filtered.length === 1 ? '' : 's'}.`);
+    const saved = await window.licenseAdmin.saveCsv(`dr123-licenses-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(visibleLicenses));
+    if (saved) setMessage(`Exported ${visibleLicenses.length} license${visibleLicenses.length === 1 ? '' : 's'}.`);
   }
 
   async function revokeLicense(license: LicenseRecord) {
@@ -193,6 +236,10 @@ export default function App() {
   }
 
   async function extendLicense(license: LicenseRecord) {
+    if (license.type === 'full' && !license.expiresAt) {
+      setMessage(`${license.key} is already a lifetime license.`);
+      return;
+    }
     const input = prompt('Extend by how many days?', '7');
     if (!input) return;
     const days = Number(input);
@@ -203,6 +250,22 @@ export default function App() {
       expiresAt: addDays(base, days).toISOString(),
       lastCheckedAt: nowIso(),
     });
+    setMessage(`Extended ${license.key} by ${days} day${days === 1 ? '' : 's'}.`);
+  }
+
+  async function convertTrialToFull(license: LicenseRecord) {
+    if (license.type === 'full') {
+      setMessage(`${license.key} is already a lifetime license.`);
+      return;
+    }
+    if (!confirm(`Convert ${license.key} to full lifetime access?`)) return;
+    await updateDoc(doc(db, 'licenses', license.id), {
+      type: 'full',
+      status: license.status === 'revoked' ? 'revoked' : 'active',
+      expiresAt: '',
+      lastCheckedAt: nowIso(),
+    });
+    setMessage(`Converted ${license.key} to full lifetime access.`);
   }
 
   async function resetDevice(license: LicenseRecord) {
@@ -269,7 +332,27 @@ export default function App() {
           <Search size={16} />
           <input placeholder="Search key, clinic, phone, device..." value={queryText} onChange={(event) => setQueryText(event.target.value)} />
         </label>
+        <button className={customerFilter === 'all' ? 'selected-filter' : ''} onClick={() => setCustomerFilter('all')}><Building2 size={16} /> All customers</button>
         <button onClick={exportCsv}><Download size={16} /> Export CSV</button>
+      </section>
+
+      <section className="customers-grid">
+        {customerGroups.map((group) => (
+          <button key={group.key} className={`customer-card ${customerFilter === group.key ? 'selected' : ''}`} onClick={() => setCustomerFilter(group.key)}>
+            <div>
+              <span className="customer-icon"><Building2 size={18} /></span>
+              <h3>{group.clinicName}</h3>
+              <p>{group.contactPhone || 'No phone'} · {group.licenses.length} key{group.licenses.length === 1 ? '' : 's'}</p>
+            </div>
+            <div className="customer-metrics">
+              <span>{group.active} active</span>
+              <span>{group.trials} trial</span>
+              <span>{group.expired} expired</span>
+              {group.revoked > 0 && <span>{group.revoked} revoked</span>}
+            </div>
+          </button>
+        ))}
+        {!customerGroups.length && <div className="empty customer-empty">No customers match this filter.</div>}
       </section>
 
       <section className="panel table-panel">
@@ -287,7 +370,7 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((license) => (
+            {visibleLicenses.map((license) => (
               <tr key={license.id}>
                 <td><code>{license.key}</code></td>
                 <td>{license.type}</td>
@@ -300,6 +383,7 @@ export default function App() {
                   <div className="actions">
                     <button title="Copy key" onClick={() => copyKey(license.key)}><Copy size={15} /></button>
                     <button title="Extend license" onClick={() => extendLicense(license)}><TimerReset size={15} /></button>
+                    {license.type === 'trial' && license.status !== 'revoked' && <button title="Convert trial to full" onClick={() => convertTrialToFull(license)}>Full</button>}
                     <button title="Reset device binding" onClick={() => resetDevice(license)}><RotateCcw size={15} /></button>
                     <button className="danger" onClick={() => revokeLicense(license)}>Revoke</button>
                   </div>
@@ -308,7 +392,7 @@ export default function App() {
             ))}
           </tbody>
         </table>
-        {!filtered.length && <div className="empty">No licenses found.</div>}
+        {!visibleLicenses.length && <div className="empty">No licenses found.</div>}
       </section>
     </main>
   );

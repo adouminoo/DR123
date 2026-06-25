@@ -32,7 +32,6 @@ import {
 } from 'lucide-react';
 import { changeCurrentPassword, loginWithPassword, logout, registerWithLicenseKey, watchAuth, type AppUser } from './lib/auth';
 import {
-  addPayment,
   createAudit,
   deleteTimelineNote,
   downloadFile,
@@ -43,12 +42,15 @@ import {
   getCollection,
   getSettingsBackup,
   importBackup,
+  markAppointmentPaid,
   makeAppointmentId,
   makePatientId,
   nowIso,
   overlaps,
   paymentMethods,
   permanentlyDelete,
+  prepareBackupImport,
+  type PreparedBackupImport,
   purgeOldDeleted,
   restoreItem,
   scopedDoc,
@@ -59,11 +61,13 @@ import {
   toDateTime,
   todayIso,
   upsertAppointment,
+  upsertAppointmentWithPayment,
   upsertPatient,
   upsertService,
   upsertServiceCategory,
   upsertTimelineNote,
 } from './lib/clinic';
+import { checkRegisteredLicenseForUser, type LicenseRecord } from './lib/license';
 import { sampleAppointments, samplePatients, samplePayments, sampleServices, sampleServiceCategories, sampleTreatments } from './data/sampleData';
 import type {
   Appointment,
@@ -517,8 +521,25 @@ function dateInRange(date: string, days: number) {
   return value >= start && value < end;
 }
 
+function daysSince(date: string) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const value = new Date(`${date}T00:00`);
+  return Math.max(0, Math.floor((start.getTime() - value.getTime()) / 86400000));
+}
+
 function isTomorrowToken(token: string) {
   return ['tomorrow', 'demain', 'غدا'].includes(token.toLowerCase());
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] || char));
 }
 
 function eventColor(status: AppointmentStatus) {
@@ -583,10 +604,14 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
 
 function Login({
   t,
+  authError,
+  onClearAuthError,
   onRegistrationComplete,
   onRegistrationPending,
 }: {
   t: Record<string, string>;
+  authError: string;
+  onClearAuthError: () => void;
   onRegistrationComplete: (user: AppUser) => void;
   onRegistrationPending: (pending: boolean) => void;
 }) {
@@ -598,10 +623,15 @@ function Login({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (authError) setError(authError);
+  }, [authError]);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    onClearAuthError();
     const isRegistering = mode === 'register';
     try {
       if (isRegistering) {
@@ -691,6 +721,36 @@ function StatCard({ label, value, icon: Icon, detail, tone = 'default', featured
   );
 }
 
+function LicenseStatusPanel({ license, onRefresh }: { license: LicenseRecord | null; onRefresh?: () => void }) {
+  const statusClass = license?.status === 'active' ? 'badge-success' : license?.status === 'revoked' ? 'badge-danger' : 'badge-warning';
+  const expiry = license?.expiresAt ? new Date(license.expiresAt).toLocaleDateString() : 'Lifetime';
+
+  return (
+    <aside className="license-panel">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">License status</h3>
+          <p className="section-subtitle">Current clinic access and device binding.</p>
+        </div>
+        {license && <span className={statusClass}>{license.status}</span>}
+      </div>
+      {license ? (
+        <div className="mt-4 space-y-3 text-sm">
+          <div className="license-row"><span>Type</span><b>{license.type === 'full' ? 'Full lifetime' : 'Trial'}</b></div>
+          <div className="license-row"><span>Expires</span><b>{expiry}</b></div>
+          <div className="license-row"><span>Clinic</span><b>{license.clinicName || 'Not set'}</b></div>
+          <div className="license-row"><span>Contact</span><b>{license.contactPhone || 'Not set'}</b></div>
+          <div className="license-row"><span>Last checked</span><b>{license.lastCheckedAt ? new Date(license.lastCheckedAt).toLocaleString() : 'Just now'}</b></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">{license.key}</div>
+        </div>
+      ) : (
+        <p className="empty-state mt-4">License details are unavailable.</p>
+      )}
+      {onRefresh && <button className="btn-secondary mt-4 w-full" onClick={onRefresh}>Refresh license</button>}
+    </aside>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
@@ -698,6 +758,8 @@ export default function App() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const registrationPendingRef = useRef(false);
+  const [authError, setAuthError] = useState('');
+  const [license, setLicense] = useState<LicenseRecord | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [query, setQuery] = useState('');
@@ -722,6 +784,7 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [quickInput, setQuickInput] = useState('');
   const [draftPrompt, setDraftPrompt] = useState(false);
+  const [pendingImport, setPendingImport] = useState<PreparedBackupImport | null>(null);
   const [lastBackup, setLastBackup] = useState<{ at: string; content: string } | null>(() => {
     const saved = localStorage.getItem('dr123_last_backup');
     return saved ? JSON.parse(saved) : null;
@@ -761,10 +824,21 @@ export default function App() {
     ]);
   }
 
-  function openAppForUser(nextUser: AppUser) {
-    setUser(nextUser);
-    setActiveUserId(nextUser.uid);
-    load().catch((err) => setMessage(err.message));
+  async function openAppForUser(nextUser: AppUser) {
+    try {
+      setAuthError('');
+      const activeLicense = await checkRegisteredLicenseForUser(nextUser.uid);
+      setLicense(activeLicense);
+      setUser(nextUser);
+      setActiveUserId(nextUser.uid);
+      await load();
+    } catch (err) {
+      setLicense(null);
+      setUser(null);
+      setActiveUserId('');
+      setAuthError(err instanceof Error ? err.message : 'License validation failed.');
+      await logout();
+    }
   }
 
   useEffect(() => {
@@ -782,9 +856,10 @@ export default function App() {
         return;
       }
       if (nextUser) {
-        openAppForUser(nextUser);
+        void openAppForUser(nextUser);
       } else {
         setUser(null);
+        setLicense(null);
         setActiveUserId('');
       }
     });
@@ -908,9 +983,10 @@ export default function App() {
       setMessage('Appointment overlaps another active appointment.');
       return;
     }
-    await upsertAppointment(appointment, isNew);
     if (appointment.paid && appointment.revenueAmount > 0) {
-      await addPayment({ id: `payment-${appointment.id}`, appointmentId: appointment.appointmentId, patientId: appointment.patientId, patientName: appointment.patientName, amount: appointment.revenueAmount, method: appointment.paymentMethod, paid: true, date: appointment.date, notes: 'Generated from appointment payment status.', createdAt: nowIso() });
+      await upsertAppointmentWithPayment(appointment, isNew);
+    } else {
+      await upsertAppointment(appointment, isNew);
     }
     resetAppointmentForm();
     await load();
@@ -984,11 +1060,66 @@ export default function App() {
     setMessage('Reminder copied.');
   }
 
+  function paymentReminderText(appointment: Appointment) {
+    return `Bonjour ${appointment.patientName}, rappel paiement DR123: ${formatMad(appointment.revenueAmount)} pour ${appointment.serviceName || appointment.treatmentPerformed || 'votre rendez-vous'} du ${appointment.date}. Merci.`;
+  }
+
+  function copyPaymentReminder(appointment: Appointment) {
+    navigator.clipboard.writeText(paymentReminderText(appointment));
+    setMessage('Payment reminder copied.');
+  }
+
   function whatsappLink(appointment: Appointment) {
     const patient = patients.find((item) => item.patientId === appointment.patientId);
     const phone = (patient?.phone || '').replace(/\D/g, '');
     const text = encodeURIComponent(`Bonjour ${appointment.patientName}, rappel de votre rendez-vous DR123 le ${appointment.date} a ${appointment.time}. Merci.`);
     return `https://wa.me/${phone}?text=${text}`;
+  }
+
+  function paymentWhatsappLink(appointment: Appointment) {
+    const patient = patients.find((item) => item.patientId === appointment.patientId);
+    const phone = (patient?.phone || '').replace(/\D/g, '');
+    return `https://wa.me/${phone}?text=${encodeURIComponent(paymentReminderText(appointment))}`;
+  }
+
+  function downloadReceipt(appointment: Appointment) {
+    const patient = patients.find((item) => item.patientId === appointment.patientId);
+    const status = appointment.paid ? 'Receipt' : 'Invoice';
+    const receipt = {
+      appointmentId: escapeHtml(appointment.appointmentId),
+      patientName: escapeHtml(appointment.patientName),
+      phone: escapeHtml(patient?.phone || '-'),
+      dateTime: escapeHtml(`${appointment.date} ${appointment.time}`),
+      service: escapeHtml(appointment.serviceName || appointment.treatmentPerformed || '-'),
+      paymentMethod: escapeHtml(appointment.paymentMethod),
+      status: appointment.paid ? 'Paid' : 'Unpaid',
+    };
+    const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>${status} ${receipt.appointmentId}</title></head>
+<body style="font-family:Arial,sans-serif;margin:40px;color:#0f172a">
+  <h1 style="margin:0 0 8px">DR123 ${status}</h1>
+  <p style="margin:0 0 24px;color:#64748b">Generated ${new Date().toLocaleString()}</p>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Appointment</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right"><b>${receipt.appointmentId}</b></td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Patient</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.patientName}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Phone</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.phone}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.dateTime}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Service</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.service}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Payment method</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.paymentMethod}</td></tr>
+    <tr><td style="padding:12px 8px;font-size:18px">Total</td><td style="padding:12px 8px;text-align:right;font-size:18px"><b>${formatMad(appointment.revenueAmount)}</b></td></tr>
+    <tr><td style="padding:8px">Status</td><td style="padding:8px;text-align:right">${receipt.status}</td></tr>
+  </table>
+</body>
+</html>`;
+    downloadFile(`${status.toLowerCase()}-${appointment.appointmentId}.html`, html, 'text/html');
+    setMessage(`${status} downloaded.`);
+  }
+
+  async function markPaid(appointment: Appointment) {
+    await markAppointmentPaid(appointment);
+    setMessage(`${appointment.appointmentId} marked paid.`);
+    await load();
   }
 
   async function updateAppointmentStatus(appointment: Appointment, status: AppointmentStatus) {
@@ -1076,8 +1207,22 @@ export default function App() {
 
   async function handleImport(file?: File) {
     if (!file) return;
-    const parsed = JSON.parse(await file.text()) as ClinicBackup;
-    await importBackup(parsed);
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const preview = prepareBackupImport(parsed);
+      setPendingImport(preview);
+      setMessage(`Backup ready: ${preview.totalRecords} records found. Review before importing.`);
+    } catch (err) {
+      setPendingImport(null);
+      setMessage(err instanceof Error ? err.message : 'Backup file could not be read.');
+    }
+  }
+
+  async function confirmImport() {
+    if (!pendingImport) return;
+    await importBackup(pendingImport.backup);
+    setPendingImport(null);
+    setMessage(`Imported ${pendingImport.totalRecords} backup records.`);
     await load();
   }
 
@@ -1103,13 +1248,15 @@ export default function App() {
     return (
       <Login
         t={t}
+        authError={authError}
+        onClearAuthError={() => setAuthError('')}
         onRegistrationPending={(pending) => {
           registrationPendingRef.current = pending;
         }}
         onRegistrationComplete={(registeredUser) => {
           registrationPendingRef.current = false;
           setAuthReady(true);
-          openAppForUser(registeredUser);
+          void openAppForUser(registeredUser);
         }}
       />
     );
@@ -1213,8 +1360,8 @@ export default function App() {
                 <RecentPatients t={t} recentPatients={recentPatients} patients={patients} openPatient={(patient) => { openPatient(patient); setTab('patients'); }} />
               </section>
               <section className="grid gap-4 xl:grid-cols-2">
-                <div className="dashboard-panel"><div className="panel-heading"><div><h3 className="section-title">{t.upcoming}</h3><p className="section-subtitle">Next 7 days</p></div><span className="badge-info">{upcomingDashboardAppointments.length}</span></div><AppointmentList t={t} appointments={upcomingDashboardAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></div>
-                <div className="dashboard-panel"><div className="panel-heading"><div><h3 className="section-title">{t.outstandingPayments}</h3><p className="section-subtitle">Payments needing follow-up</p></div><span className="badge-warning">{outstandingDashboardAppointments.length}</span></div><AppointmentList t={t} appointments={outstandingDashboardAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></div>
+                <div className="dashboard-panel"><div className="panel-heading"><div><h3 className="section-title">{t.upcoming}</h3><p className="section-subtitle">Next 7 days</p></div><span className="badge-info">{upcomingDashboardAppointments.length}</span></div><AppointmentList t={t} appointments={upcomingDashboardAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} onReceipt={downloadReceipt} whatsappLink={whatsappLink} /></div>
+                <OutstandingPaymentsPanel appointments={outstandingDashboardAppointments} onCopy={copyPaymentReminder} onMarkPaid={markPaid} onReceipt={downloadReceipt} paymentWhatsappLink={paymentWhatsappLink} />
               </section>
             </>
           )}
@@ -1233,7 +1380,7 @@ export default function App() {
               <PatientForm t={t} form={patientForm} setForm={setPatientForm} editing={editingPatient} onSubmit={savePatient} onReset={resetPatientForm} />
               <div className="space-y-4">
                 <PatientsTable t={t} patients={filteredPatients} appointments={appointments} onOpen={openPatient} onDelete={async (patient) => { await softDelete('patients', patient.id, patient.patientId, 'patient', patient.name); await load(); }} />
-                {selectedPatient && <PatientProfile t={t} patient={selectedPatient} appointments={appointments} notes={timelineNotes.filter((note) => note.patientId === selectedPatient.patientId)} onNote={addOrEditNote} onDeleteNote={async (note) => { await deleteTimelineNote(note); await load(); }} />}
+                {selectedPatient && <PatientProfile t={t} patient={selectedPatient} appointments={appointments} payments={payments} notes={timelineNotes.filter((note) => note.patientId === selectedPatient.patientId)} onNote={addOrEditNote} onDeleteNote={async (note) => { await deleteTimelineNote(note); await load(); }} />}
               </div>
             </section>
           )}
@@ -1242,7 +1389,7 @@ export default function App() {
 
           {tab === 'waiting' && <WaitingRoom t={t} appointments={appointments.filter((item) => item.date === todayIso())} onMove={updateAppointmentStatus} />}
 
-          {tab === 'revenue' && <RevenuePage t={t} revenue={revenue} appointments={appointments} />}
+          {tab === 'revenue' && <RevenuePage t={t} revenue={revenue} appointments={appointments} onMarkPaid={markPaid} onReceipt={downloadReceipt} />}
 
           {tab === 'stats' && <Stats t={t} appointments={appointments} patients={patients} />}
 
@@ -1251,9 +1398,35 @@ export default function App() {
               <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={exportJson}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportJson}</button>
               <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={exportCsv}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportCsv}</button>
               <button className="card p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift" onClick={() => exportExcel(backup)}><Download className="mb-3 h-5 w-5 text-brand-600" />{t.exportExcel}</button>
-              <label className="card cursor-pointer p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift"><Upload className="mb-3 h-5 w-5 text-brand-600" />{t.importBackup}<input className="hidden" type="file" accept="application/json" onChange={(event) => handleImport(event.target.files?.[0])} /></label>
+              <label className="card cursor-pointer p-5 text-left font-semibold transition hover:-translate-y-0.5 hover:shadow-lift"><Upload className="mb-3 h-5 w-5 text-brand-600" />{t.importBackup}<input className="hidden" type="file" accept="application/json" onChange={(event) => { handleImport(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label>
               <button className="btn-primary md:col-span-2" onClick={seedData}>{t.loadSample}</button>
               {lastBackup && <button className="btn-secondary md:col-span-2" onClick={() => downloadFile(`backup-${lastBackup.at.slice(0, 10)}.json`, lastBackup.content, 'application/json')}>{t.downloadBackup}</button>}
+              {pendingImport && (
+                <section className="backup-preview md:col-span-2 xl:col-span-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">Import preview</p>
+                    <h3 className="section-title mt-1">{pendingImport.totalRecords} records ready to import</h3>
+                    <p className="section-subtitle">Review the backup contents before writing them to this clinic account.</p>
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {pendingImport.summary.filter((item) => item.count > 0).map((item) => (
+                      <div key={item.key} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-950/50">
+                        <span className="text-slate-500 dark:text-slate-400">{item.label}</span>
+                        <b className="float-right text-slate-950 dark:text-white">{item.count}</b>
+                      </div>
+                    ))}
+                  </div>
+                  {pendingImport.warnings.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {pendingImport.warnings.map((warning) => <p key={warning} className="badge-warning">{warning}</p>)}
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button className="btn-primary" onClick={confirmImport}>Import backup</button>
+                    <button className="btn-secondary" onClick={() => setPendingImport(null)}>Cancel</button>
+                  </div>
+                </section>
+              )}
             </section>
           )}
 
@@ -1262,14 +1435,17 @@ export default function App() {
           {tab === 'audit' && <AuditTable auditLogs={auditLogs} />}
 
           {tab === 'settings' && (
-            <section className="card max-w-xl p-5">
-              <h3 className="section-title">{t.adminPassword}</h3>
-              <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
-              <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
+            <section className="grid max-w-5xl gap-4 lg:grid-cols-[1fr_360px]">
+              <div className="card p-5">
+                <h3 className="section-title">{t.adminPassword}</h3>
+                <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
+                <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
+              </div>
+              <LicenseStatusPanel license={license} onRefresh={user ? () => openAppForUser(user) : undefined} />
             </section>
           )}
 
-          {query && !['patients', 'recycle'].includes(tab) && <section className="card p-4"><h3 className="section-title">{t.searchResults}</h3><AppointmentList t={t} appointments={filteredAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} whatsappLink={whatsappLink} /></section>}
+          {query && !['patients', 'recycle'].includes(tab) && <section className="card p-4"><h3 className="section-title">{t.searchResults}</h3><AppointmentList t={t} appointments={filteredAppointments} onEdit={editAppointment} onDelete={deleteAppointment} onCopy={copyReminder} onReceipt={downloadReceipt} whatsappLink={whatsappLink} /></section>}
           <footer className="pb-2 pt-4 text-center text-xs text-slate-500 dark:text-slate-500 lg:hidden">{FOOTER_CREDIT}</footer>
         </main>
       </div>
@@ -1342,6 +1518,44 @@ function RecentPatients({ t, recentPatients, patients, openPatient }: { t: Recor
   );
 }
 
+function OutstandingPaymentsPanel({ appointments, onCopy, onMarkPaid, onReceipt, paymentWhatsappLink }: { appointments: Appointment[]; onCopy: (item: Appointment) => void; onMarkPaid: (item: Appointment) => void; onReceipt: (item: Appointment) => void; paymentWhatsappLink: (item: Appointment) => string }) {
+  const total = appointments.reduce((sum, item) => sum + Number(item.revenueAmount || 0), 0);
+  const overdue = appointments.filter((item) => daysSince(item.date) >= 7).length;
+
+  return (
+    <div className="dashboard-panel">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">Outstanding payments</h3>
+          <p className="section-subtitle">{formatMad(total)} open balance · {overdue} older than 7 days</p>
+        </div>
+        <span className="badge-warning">{appointments.length}</span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {appointments.length === 0 && <p className="empty-state empty-state-polished mt-3"><CheckCircle2 className="h-5 w-5" />No outstanding payments.</p>}
+        {appointments.map((item) => (
+          <div key={item.id} className="payment-row">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold text-slate-950 dark:text-white">{item.patientName}</p>
+                <span className="badge-warning">{formatMad(item.revenueAmount)}</span>
+                <span className={daysSince(item.date) >= 7 ? 'badge-danger' : 'badge-info'}>{daysSince(item.date)}d open</span>
+              </div>
+              <p className="mt-1 truncate text-sm text-slate-500">{item.date} · {item.serviceName || item.treatmentPerformed || 'Appointment'} · {item.paymentMethod}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>
+              <button className="btn-secondary" onClick={() => onReceipt(item)}>Invoice</button>
+              <button className="btn-secondary" onClick={() => onCopy(item)}>Copy follow-up</button>
+              <a className="btn-secondary" href={paymentWhatsappLink(item)} target="_blank" rel="noreferrer">WhatsApp</a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PatientForm({ t, form, setForm, editing, onSubmit, onReset }: { t: Record<string, string>; form: Patient; setForm: (form: Patient) => void; editing: boolean; onSubmit: (event: React.FormEvent) => void; onReset: () => void }) {
   return (
     <form className="card space-y-3 p-4" onSubmit={onSubmit}>
@@ -1394,19 +1608,64 @@ function PatientAlerts({ t, patient, appointments }: { t: Record<string, string>
   return <div className="mt-2 flex flex-wrap gap-1">{alerts.map((alert) => <span key={String(alert)} className="badge-warning">! {alert}</span>)}</div>;
 }
 
-function PatientProfile({ t, patient, appointments, notes, onNote, onDeleteNote }: { t: Record<string, string>; patient: Patient; appointments: Appointment[]; notes: TimelineNote[]; onNote: (text: string, existing?: TimelineNote) => void; onDeleteNote: (note: TimelineNote) => void }) {
+function PatientProfile({ t, patient, appointments, payments, notes, onNote, onDeleteNote }: { t: Record<string, string>; patient: Patient; appointments: Appointment[]; payments: Payment[]; notes: TimelineNote[]; onNote: (text: string, existing?: TimelineNote) => void; onDeleteNote: (note: TimelineNote) => void }) {
   const [noteText, setNoteText] = useState('');
   const [editing, setEditing] = useState<TimelineNote | undefined>();
-  return <div className="card p-4"><h3 className="section-title">{t.patientProfile}: {patient.name}</h3><PatientAlerts t={t} patient={patient} appointments={appointments} /><p className="section-subtitle">{patient.medicalNotes || t.noData}</p><h4 className="mt-5 font-semibold">{t.medicalTimeline}</h4><form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); onNote(noteText, editing); setNoteText(''); setEditing(undefined); }}><input className="input" value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t.notes} /><button className="btn-primary">{editing ? t.save : t.addNote}</button></form><div className="mt-4 space-y-3">{notes.length === 0 && <p className="empty-state">{t.noData}</p>}{notes.map((note) => <div key={note.id} className="rounded-md border border-slate-200 bg-slate-50/70 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/40"><div className="flex justify-between gap-3"><p><span className="font-semibold text-slate-700 dark:text-slate-200">{new Date(note.createdAt).toLocaleDateString()}</span> - {note.text}</p><div className="flex gap-2"><button className="text-brand-600" onClick={() => { setEditing(note); setNoteText(note.text); }}>{t.edit}</button><button className="text-red-600" onClick={() => onDeleteNote(note)}>{t.delete}</button></div></div></div>)}</div></div>;
+  const history = appointments.filter((item) => item.patientId === patient.patientId).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`));
+  const patientPayments = payments.filter((item) => item.patientId === patient.patientId);
+  const paidTotal = history.filter((item) => item.paid).reduce((total, item) => total + item.revenueAmount, 0);
+  const unpaidTotal = history.filter((item) => !item.paid).reduce((total, item) => total + item.revenueAmount, 0);
+  const noShows = history.filter((item) => item.status === 'No Show').length;
+
+  return (
+    <div className="card p-4">
+      <div className="panel-heading">
+        <div>
+          <h3 className="section-title">{t.patientProfile}: {patient.name}</h3>
+          <p className="section-subtitle">{patient.patientId} · {patient.phone} · {patient.age} {t.age}</p>
+        </div>
+        <span className={unpaidTotal > 0 ? 'badge-warning' : 'badge-success'}>{unpaidTotal > 0 ? `${formatMad(unpaidTotal)} unpaid` : 'Clear balance'}</span>
+      </div>
+      <PatientAlerts t={t} patient={patient} appointments={appointments} />
+      <section className="patient-summary-grid">
+        <StatCard label="Appointments" value={String(history.length)} icon={CalendarDays} detail={`${noShows} no-show`} />
+        <StatCard label="Paid" value={formatMad(paidTotal)} icon={WalletCards} detail={`${patientPayments.length} payments`} tone="success" />
+        <StatCard label="Outstanding" value={formatMad(unpaidTotal)} icon={WalletCards} detail="Open balance" tone={unpaidTotal > 0 ? 'warning' : 'neutral'} />
+      </section>
+      <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/50">
+        <p className="font-semibold text-slate-950 dark:text-white">Medical notes</p>
+        <p className="mt-1 text-slate-500 dark:text-slate-400">{patient.medicalNotes || t.noData}</p>
+      </div>
+      <section className="mt-4 grid gap-4 xl:grid-cols-2">
+        <div>
+          <h4 className="font-semibold">{t.history}</h4>
+          <div className="mt-3 space-y-2">
+            {history.slice(0, 6).map((item) => (
+              <div key={item.id} className="patient-history-row">
+                <div><b>{item.date}</b><p>{item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div>
+                <span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span>
+              </div>
+            ))}
+            {history.length === 0 && <p className="empty-state">{t.noData}</p>}
+          </div>
+        </div>
+        <div>
+          <h4 className="font-semibold">{t.medicalTimeline}</h4>
+          <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); onNote(noteText, editing); setNoteText(''); setEditing(undefined); }}><input className="input" value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder={t.notes} /><button className="btn-primary">{editing ? t.save : t.addNote}</button></form>
+          <div className="mt-4 space-y-3">{notes.length === 0 && <p className="empty-state">{t.noData}</p>}{notes.map((note) => <div key={note.id} className="rounded-md border border-slate-200 bg-slate-50/70 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/40"><div className="flex justify-between gap-3"><p><span className="font-semibold text-slate-700 dark:text-slate-200">{new Date(note.createdAt).toLocaleDateString()}</span> - {note.text}</p><div className="flex gap-2"><button className="text-brand-600" onClick={() => { setEditing(note); setNoteText(note.text); }}>{t.edit}</button><button className="text-red-600" onClick={() => onDeleteNote(note)}>{t.delete}</button></div></div></div>)}</div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function ServicesPage({ t, services, categories, serviceForm, setServiceForm, editing, onSubmit, onReset, onEdit, onDelete, categoryName, setCategoryName, onCategorySubmit, onCategoryDelete }: { t: Record<string, string>; services: Service[]; categories: ServiceCategory[]; serviceForm: Service; setServiceForm: (service: Service) => void; editing: boolean; onSubmit: (event: React.FormEvent) => void; onReset: () => void; onEdit: (service: Service) => void; onDelete: (service: Service) => void; categoryName: string; setCategoryName: (value: string) => void; onCategorySubmit: (event: React.FormEvent) => void; onCategoryDelete: (category: ServiceCategory) => void }) {
   return <section className="grid gap-4 xl:grid-cols-[360px_1fr]"><div className="space-y-4"><form className="card space-y-3 p-4" onSubmit={onSubmit}><h3 className="section-title">{editing ? t.edit : t.newService}</h3><input className="input" placeholder={t.name} value={serviceForm.name} onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })} required /><select className="input" value={serviceForm.category} onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })} required><option value="">{t.category}</option>{categories.map((category) => <option key={category.id}>{category.name}</option>)}</select><input className="input" type="number" placeholder={t.defaultDuration} value={serviceForm.defaultDuration} onChange={(e) => setServiceForm({ ...serviceForm, defaultDuration: Number(e.target.value) })} /><input className="input" type="number" placeholder={t.defaultPrice} value={serviceForm.defaultPrice} onChange={(e) => setServiceForm({ ...serviceForm, defaultPrice: Number(e.target.value) })} /><textarea className="input min-h-20" placeholder={t.description} value={serviceForm.description} onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })} /><label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-800 dark:bg-slate-950"><input type="checkbox" checked={serviceForm.active} onChange={(e) => setServiceForm({ ...serviceForm, active: e.target.checked })} />{serviceForm.active ? t.active : t.inactive}</label><div className="flex gap-2"><button className="btn-primary">{t.save}</button><button className="btn-secondary" type="button" onClick={onReset}>{t.clear}</button></div></form><div className="card p-4"><form className="flex gap-2" onSubmit={onCategorySubmit}><input className="input" placeholder={t.category} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button className="btn-primary">{t.create}</button></form><div className="mt-3 space-y-2">{categories.map((category) => <div key={category.id} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-950/50"><span>{category.name}</span><button className="text-red-600" type="button" onClick={() => onCategoryDelete(category)}>{t.delete}</button></div>)}</div></div></div><div className="table-wrap"><table className="data-table"><thead><tr><th>{t.services}</th><th>{t.category}</th><th>{t.defaultDuration}</th><th>{t.defaultPrice}</th><th></th></tr></thead><tbody>{services.map((service) => <tr key={service.id}><td><b className="text-slate-950 dark:text-white">{service.name}</b><br /><span className="text-slate-500">{service.description}</span></td><td><span className="badge-info">{service.category}</span></td><td>{service.defaultDuration}m</td><td>{formatMad(service.defaultPrice)}</td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onEdit(service)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(service)}>{t.delete}</button></div></td></tr>)}</tbody></table></div></section>;
 }
 
-function AppointmentList({ t, appointments, onEdit, onDelete, onCopy, whatsappLink }: { t: Record<string, string>; appointments: Appointment[]; onEdit: (item: Appointment) => void; onDelete: (item: Appointment) => void; onCopy: (item: Appointment) => void; whatsappLink: (item: Appointment) => string }) {
+function AppointmentList({ t, appointments, onEdit, onDelete, onCopy, onReceipt, whatsappLink }: { t: Record<string, string>; appointments: Appointment[]; onEdit: (item: Appointment) => void; onDelete: (item: Appointment) => void; onCopy: (item: Appointment) => void; onReceipt: (item: Appointment) => void; whatsappLink: (item: Appointment) => string }) {
   if (!appointments.length) return <p className="empty-state empty-state-polished mt-3"><CheckCircle2 className="h-5 w-5" />{t.noAppointments}</p>;
-  return <div className="mt-3 space-y-2">{appointments.map((item) => <div key={item.id} className="appointment-row"><div className="appointment-date"><b>{item.time}</b><span>{item.date}</span></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-950 dark:text-white">{item.appointmentId} - {item.patientName}</p><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span><span className="badge-info">{tStatus(item.status, t)}</span></div><p className="mt-1 truncate text-sm text-slate-500">{item.duration}m | {item.serviceName || item.treatmentPerformed || t.noTreatmentYet} | {formatMad(item.revenueAmount)}</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={() => onCopy(item)}>{t.copyReminder}</button><a className="btn-secondary" href={whatsappLink(item)} target="_blank" rel="noreferrer">WhatsApp</a><button className="btn-secondary" onClick={() => onEdit(item)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(item)}>{t.delete}</button></div></div>)}</div>;
+  return <div className="mt-3 space-y-2">{appointments.map((item) => <div key={item.id} className="appointment-row"><div className="appointment-date"><b>{item.time}</b><span>{item.date}</span></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-950 dark:text-white">{item.appointmentId} - {item.patientName}</p><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span><span className="badge-info">{tStatus(item.status, t)}</span></div><p className="mt-1 truncate text-sm text-slate-500">{item.duration}m | {item.serviceName || item.treatmentPerformed || t.noTreatmentYet} | {formatMad(item.revenueAmount)}</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={() => onCopy(item)}>{t.copyReminder}</button><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button><a className="btn-secondary" href={whatsappLink(item)} target="_blank" rel="noreferrer">WhatsApp</a><button className="btn-secondary" onClick={() => onEdit(item)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(item)}>{t.delete}</button></div></div>)}</div>;
 }
 
 function WaitingRoom({ t, appointments, onMove }: { t: Record<string, string>; appointments: Appointment[]; onMove: (appointment: Appointment, status: AppointmentStatus) => void }) {
@@ -1415,8 +1674,8 @@ function WaitingRoom({ t, appointments, onMove }: { t: Record<string, string>; a
   return <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{lanes.map((lane) => <div key={lane} className="card min-h-80 p-3" onDragOver={(e) => e.preventDefault()} onDrop={() => dragged && onMove(dragged, lane)}><h3 className="mb-3 flex items-center justify-between font-semibold"><span>{tStatus(lane, t)}</span><span className="badge-info">{appointments.filter((item) => item.status === lane).length}</span></h3>{appointments.filter((item) => item.status === lane).map((item) => <div key={item.id} draggable onDragStart={() => setDragged(item)} className="mb-3 cursor-grab rounded-md border border-slate-200 bg-slate-50 p-3 text-sm shadow-soft transition hover:border-brand-200 dark:border-slate-700 dark:bg-slate-800"><p className="font-semibold text-slate-950 dark:text-white">{item.patientName}</p><p className="text-slate-500">{item.time} - {item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div>)}</div>)}</section>;
 }
 
-function RevenuePage({ t, revenue, appointments }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[] }) {
-  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Patient</th><th>{t.services}</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{formatMad(item.revenueAmount)}</td><td>{item.paymentMethod}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td></tr>)}</tbody></table></div></section>;
+function RevenuePage({ t, revenue, appointments, onMarkPaid, onReceipt }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[]; onMarkPaid: (appointment: Appointment) => void; onReceipt: (appointment: Appointment) => void }) {
+  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Patient</th><th>{t.services}</th><th>Amount</th><th>Method</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{formatMad(item.revenueAmount)}</td><td>{item.paymentMethod}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div></section>;
 }
 
 function Stats({ t, appointments, patients }: { t: Record<string, string>; appointments: Appointment[]; patients: Patient[] }) {

@@ -4,8 +4,8 @@ Top Management You is a complete single-doctor clinic management web app built w
 
 ## Features
 
-- License key gate before account login
 - Firebase Auth email/password account login and logout
+- License-key registration for new clinic accounts
 - Per-account clinic data under `users/{uid}`
 - English, French, and Arabic UI translations
 - Arabic automatically switches the app to RTL layout
@@ -21,12 +21,14 @@ Top Management You is a complete single-doctor clinic management web app built w
 - Appointment durations: 15, 30, 45, 60, 90, 120, or custom
 - Quick appointment input, such as `Adam 15:00` or `Sarah tomorrow 10:30`
 - Appointment auto-save drafts in `localStorage` with restore/discard prompt
-- Patients with IDs, medical notes, appointment history, and treatment history
+- Patients with IDs, medical notes, appointment/payment summaries, and treatment history
 - Patient medical timeline notes with add, edit, delete, and timestamps
 - Services and customizable service categories
 - Service selection during appointment creation with automatic duration and price fill
 - Waiting room Kanban board
 - Manual revenue and paid/unpaid tracking
+- Outstanding payment follow-up queue with reminders and mark-paid actions
+- Invoice/receipt HTML downloads for appointment payments
 - Cash, card, transfer, and other payment methods
 - WhatsApp reminder copy/open buttons
 - Search by patient ID, patient name, phone, and appointment ID
@@ -70,21 +72,9 @@ npm run dev
 
 Open the Vite URL, usually `http://localhost:5173`.
 
-The public DR123 app asks for a license key first. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`.
+The public DR123 app opens directly to Login/Register. Existing users sign in with Firebase Authentication email/password accounts.
 
-Users sign in with Firebase Authentication email/password accounts.
-To let a new user register, create a Firestore document before giving them the code:
-
-```txt
-activationCodes/DR123-EXAMPLE-001
-  createdAt: ISO string
-  usedBy: null
-  usedByEmail: null
-  usedAt: null
-```
-
-Give the document id, for example `DR123-EXAMPLE-001`, to the user as their activation code.
-After registration the app marks that code with `usedBy`, `usedByEmail`, and `usedAt`.
+New users register with name, email, password, and a valid DR123 license key. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`. During registration, DR123 creates the Firebase Auth user, activates/binds the license, and creates the user document in one Firestore transaction. If license registration fails, the temporary Auth user is deleted.
 
 ## Build
 
@@ -98,7 +88,6 @@ npm run preview
 Collections used by the app:
 
 ```txt
-activationCodes/{code}
 admins/{uid}
 licenses/{key}
 users/{uid}
@@ -261,7 +250,7 @@ Features:
 - Bulk generate keys
 - Copy keys to clipboard
 - Export visible keys to CSV
-- View, search, revoke, extend, and reset device binding
+- View, search, group by customer, revoke, extend, convert trial to full, and reset device binding
 - Status counters for active, unused, expired, and revoked licenses
 
 Build a Windows installer:

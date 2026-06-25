@@ -721,7 +721,7 @@ function StatCard({ label, value, icon: Icon, detail, tone = 'default', featured
   );
 }
 
-function LicenseStatusPanel({ license, onRefresh }: { license: LicenseRecord | null; onRefresh?: () => void }) {
+function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: LicenseRecord | null; userEmail?: string | null; onRefresh?: () => void }) {
   const statusClass = license?.status === 'active' ? 'badge-success' : license?.status === 'revoked' ? 'badge-danger' : 'badge-warning';
   const expiry = license?.expiresAt ? new Date(license.expiresAt).toLocaleDateString() : 'Lifetime';
 
@@ -737,6 +737,7 @@ function LicenseStatusPanel({ license, onRefresh }: { license: LicenseRecord | n
       {license ? (
         <div className="mt-4 space-y-3 text-sm">
           <div className="license-row"><span>Type</span><b>{license.type === 'full' ? 'Full lifetime' : 'Trial'}</b></div>
+          <div className="license-row"><span>Account email</span><b>{userEmail || 'Not available'}</b></div>
           <div className="license-row"><span>Expires</span><b>{expiry}</b></div>
           <div className="license-row"><span>Clinic</span><b>{license.clinicName || 'Not set'}</b></div>
           <div className="license-row"><span>Contact</span><b>{license.contactPhone || 'Not set'}</b></div>
@@ -1371,7 +1372,7 @@ export default function App() {
               <div className="card p-3">
                 <FullCalendar plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} locales={[frLocale, arLocale]} locale={language} initialView="timeGridWeek" headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }} editable selectable events={events} dateClick={onDateClick} eventClick={onEventClick} eventDrop={onEventDrop} height="auto" direction={rtl ? 'rtl' : 'ltr'} />
               </div>
-              <AppointmentForm t={t} form={appointmentForm} setForm={setAppointmentForm} patients={patients} services={services} editing={editingAppointment} onSubmit={saveAppointment} onReset={() => resetAppointmentForm()} />
+              <AppointmentForm t={t} form={appointmentForm} setForm={setAppointmentForm} patients={patients} services={services} editing={editingAppointment} onSubmit={saveAppointment} onReset={() => resetAppointmentForm()} onDelete={deleteAppointment} />
             </section>
           )}
 
@@ -1441,7 +1442,7 @@ export default function App() {
                 <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
                 <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
               </div>
-              <LicenseStatusPanel license={license} onRefresh={user ? () => openAppForUser(user) : undefined} />
+              <LicenseStatusPanel license={license} userEmail={user.email} onRefresh={user ? () => openAppForUser(user) : undefined} />
             </section>
           )}
 
@@ -1570,7 +1571,7 @@ function PatientForm({ t, form, setForm, editing, onSubmit, onReset }: { t: Reco
   );
 }
 
-function AppointmentForm({ t, form, setForm, patients, services, editing, onSubmit, onReset }: { t: Record<string, string>; form: Appointment; setForm: (form: Appointment) => void; patients: Patient[]; services: Service[]; editing: boolean; onSubmit: (event: React.FormEvent) => void; onReset: () => void }) {
+function AppointmentForm({ t, form, setForm, patients, services, editing, onSubmit, onReset, onDelete }: { t: Record<string, string>; form: Appointment; setForm: (form: Appointment) => void; patients: Patient[]; services: Service[]; editing: boolean; onSubmit: (event: React.FormEvent) => void; onReset: () => void; onDelete: (appointment: Appointment) => void }) {
   function selectService(serviceId: string) {
     const service = services.find((item) => item.id === serviceId);
     setForm({ ...form, serviceId, serviceName: service?.name || '', serviceCategory: service?.category || '', duration: service?.defaultDuration || form.duration, revenueAmount: service?.defaultPrice || form.revenueAmount, treatmentPerformed: service?.name || form.treatmentPerformed });
@@ -1588,7 +1589,11 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
       <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-800 dark:bg-slate-950"><input type="checkbox" checked={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.checked })} />{t.paid}</label>
       <textarea className="input min-h-20" placeholder={t.notes} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       <p className="text-xs text-slate-500">{t.draftSaved}</p>
-      <div className="flex gap-2"><button className="btn-primary">{t.save}</button><button type="button" className="btn-secondary" onClick={onReset}>{t.clear}</button></div>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-primary">{t.save}</button>
+        <button type="button" className="btn-secondary" onClick={onReset}>{t.clear}</button>
+        {editing && form.id && <button type="button" className="btn-danger" onClick={() => onDelete(form)}><Trash2 className="h-4 w-4" />{t.delete}</button>}
+      </div>
     </form>
   );
 }

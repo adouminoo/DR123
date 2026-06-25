@@ -21,12 +21,14 @@ Top Management You is a complete single-doctor clinic management web app built w
 - Appointment durations: 15, 30, 45, 60, 90, 120, or custom
 - Quick appointment input, such as `Adam 15:00` or `Sarah tomorrow 10:30`
 - Appointment auto-save drafts in `localStorage` with restore/discard prompt
-- Patients with IDs, medical notes, appointment history, and treatment history
+- Patients with IDs, medical notes, appointment/payment summaries, and treatment history
 - Patient medical timeline notes with add, edit, delete, and timestamps
 - Services and customizable service categories
 - Service selection during appointment creation with automatic duration and price fill
 - Waiting room Kanban board
 - Manual revenue and paid/unpaid tracking
+- Outstanding payment follow-up queue with reminders and mark-paid actions
+- Invoice/receipt HTML downloads for appointment payments
 - Cash, card, transfer, and other payment methods
 - WhatsApp reminder copy/open buttons
 - Search by patient ID, patient name, phone, and appointment ID

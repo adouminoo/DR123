@@ -147,6 +147,39 @@ export async function upsertAppointment(appointment: Appointment, isNew: boolean
   );
 }
 
+function paymentFromAppointment(appointment: Appointment): Payment {
+  return {
+    id: `payment-${appointment.id}`,
+    appointmentId: appointment.appointmentId,
+    patientId: appointment.patientId,
+    patientName: appointment.patientName,
+    amount: appointment.revenueAmount,
+    method: appointment.paymentMethod,
+    paid: true,
+    date: appointment.date,
+    notes: 'Generated from appointment payment status.',
+    createdAt: nowIso(),
+  };
+}
+
+export async function upsertAppointmentWithPayment(appointment: Appointment, isNew: boolean) {
+  const batch = writeBatch(db);
+  batch.set(scopedDoc('appointments', appointment.id), appointment);
+  batch.set(scopedDoc('payments', `payment-${appointment.id}`), paymentFromAppointment(appointment));
+  await batch.commit();
+  await createAudit(
+    isNew ? 'Appointment created' : 'Appointment edited',
+    'appointment',
+    appointment.appointmentId,
+    `${appointment.patientName} on ${appointment.date} ${appointment.time}`,
+  );
+  await createAudit('Payment recorded', 'payment', `payment-${appointment.id}`, `${appointment.patientName} paid ${appointment.revenueAmount} DH`);
+}
+
+export async function markAppointmentPaid(appointment: Appointment) {
+  await upsertAppointmentWithPayment({ ...appointment, paid: true, updatedAt: nowIso() }, false);
+}
+
 export async function removeAppointment(appointment: Appointment) {
   await softDelete('appointments', appointment.id, appointment.appointmentId, 'appointment', appointment.patientName);
   await createAudit('Appointment deleted', 'appointment', appointment.appointmentId, appointment.patientName);

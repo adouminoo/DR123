@@ -661,7 +661,7 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
       <div className="auth-hero-copy">
         <p className="auth-kicker">{isLicense ? 'Protected registration' : 'Premium appointment operations'}</p>
         <h2>{isLicense ? 'Verify access before the workspace opens.' : 'A secure command center for modern appointment teams.'}</h2>
-        <p>{isLicense ? 'License status, device trust, and account access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, client data confidence, and daily schedule control.'}</p>
+        <p>{isLicense ? 'License status, account trust, and secure access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, client data confidence, and daily schedule control.'}</p>
       </div>
       <div className="auth-art" aria-hidden="true">
         <div className="auth-art-grid" />
@@ -676,7 +676,7 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
         </div>
         <div className="auth-fragment auth-fragment-b">
           <span />
-          <strong>{isLicense ? 'Device binding' : 'Client timeline'}</strong>
+          <strong>{isLicense ? 'Account license' : 'Client timeline'}</strong>
           <i />
           <i />
           <i />
@@ -882,7 +882,7 @@ function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: Licens
       <div className="panel-heading">
         <div>
           <h3 className="section-title">License status</h3>
-          <p className="section-subtitle">Current workspace access and device binding.</p>
+          <p className="section-subtitle">Current workspace access and account license.</p>
         </div>
         {license && <span className={statusClass}>{license.status}</span>}
       </div>

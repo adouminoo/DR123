@@ -14,23 +14,16 @@ export type LicenseRecord = {
   expiresAt: string;
   clinicName: string;
   contactPhone: string;
-  deviceId: string;
+  deviceId?: string;
+  ownerUid?: string;
+  ownerEmail?: string | null;
   lastCheckedAt: string;
 };
 
 const LICENSE_KEY_STORAGE = 'dr123_license_key';
-const DEVICE_ID_STORAGE = 'dr123_device_id';
 
 function normalizeLicenseKey(key: string) {
   return key.trim().toUpperCase();
-}
-
-function getDeviceId() {
-  const existing = localStorage.getItem(DEVICE_ID_STORAGE);
-  if (existing) return existing;
-  const next = crypto.randomUUID();
-  localStorage.setItem(DEVICE_ID_STORAGE, next);
-  return next;
 }
 
 function isExpired(expiresAt: string) {
@@ -49,7 +42,7 @@ function licenseFromSnapshot(id: string, data: unknown): LicenseRecord {
   return { ...(data as LicenseRecord), id };
 }
 
-function assertUsableLicense(license: LicenseRecord, deviceId: string) {
+function assertUsableLicense(license: LicenseRecord, uid?: string) {
   if (license.status === 'revoked') throw new Error('License key has been revoked.');
   if (license.status === 'expired' || isExpired(license.expiresAt)) {
     throw new Error('License key has expired.');
@@ -57,8 +50,8 @@ function assertUsableLicense(license: LicenseRecord, deviceId: string) {
   if (license.status !== 'active') {
     throw new Error('License key is not active.');
   }
-  if (license.deviceId && license.deviceId !== deviceId) {
-    throw new Error('License key is already active on another device.');
+  if (uid && license.ownerUid && license.ownerUid !== uid) {
+    throw new Error('License key is already registered to another account.');
   }
 }
 
@@ -66,7 +59,6 @@ export async function activateLicenseForUser(input: string, user: { uid: string;
   const key = normalizeLicenseKey(input);
   if (!key) throw new Error('Enter a license key.');
 
-  const deviceId = getDeviceId();
   const ref = doc(db, 'licenses', key);
   const userRef = doc(db, 'users', user.uid);
 
@@ -78,8 +70,11 @@ export async function activateLicenseForUser(input: string, user: { uid: string;
     if (data.status === 'expired' || isExpired(data.expiresAt)) {
       throw new Error('License key has expired.');
     }
-    if (data.deviceId && data.deviceId !== deviceId) {
-      throw new Error('License key is already active on another device.');
+    if (data.ownerUid && data.ownerUid !== user.uid) {
+      throw new Error('License key is already registered to another account.');
+    }
+    if (data.status === 'active' && !data.ownerUid) {
+      throw new Error('License key is already registered to an account.');
     }
 
     const now = new Date().toISOString();
@@ -89,14 +84,16 @@ export async function activateLicenseForUser(input: string, user: { uid: string;
       key: data.key || key,
       status: data.status === 'unused' ? 'active' : data.status,
       activatedAt: data.activatedAt || now,
-      deviceId,
+      ownerUid: user.uid,
+      ownerEmail: user.email,
       lastCheckedAt: now,
     } as LicenseRecord;
 
     transaction.update(ref, {
       status: nextLicense.status,
       activatedAt: nextLicense.activatedAt,
-      deviceId,
+      ownerUid: user.uid,
+      ownerEmail: user.email,
       lastCheckedAt: now,
     });
     transaction.set(userRef, {
@@ -127,7 +124,6 @@ export async function checkRegisteredLicenseForUser(uid: string): Promise<Licens
   const key = normalizeLicenseKey(userData.licenseKey || userData.licenseId || getSavedLicenseKey());
   if (!key) throw new Error('License registration missing.');
 
-  const deviceId = getDeviceId();
   const ref = doc(db, 'licenses', key);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('License key is invalid.');
@@ -138,7 +134,7 @@ export async function checkRegisteredLicenseForUser(uid: string): Promise<Licens
     throw new Error('License key has expired.');
   }
 
-  assertUsableLicense(license, deviceId);
+  assertUsableLicense(license, uid);
   await updateDoc(ref, { lastCheckedAt: new Date().toISOString() });
   localStorage.setItem(LICENSE_KEY_STORAGE, key);
   return license;
@@ -148,7 +144,6 @@ export async function validateLicenseKey(input: string): Promise<LicenseRecord> 
   const key = normalizeLicenseKey(input);
   if (!key) throw new Error('Enter a license key.');
 
-  const deviceId = getDeviceId();
   const ref = doc(db, 'licenses', key);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('License key is invalid.');
@@ -159,33 +154,5 @@ export async function validateLicenseKey(input: string): Promise<LicenseRecord> 
     await updateDoc(ref, { status: 'expired', lastCheckedAt: new Date().toISOString() });
     throw new Error('License key has expired.');
   }
-  if (license.deviceId && license.deviceId !== deviceId) {
-    throw new Error('License key is already active on another device.');
-  }
-
-  await runTransaction(db, async (transaction) => {
-    const fresh = await transaction.get(ref);
-    if (!fresh.exists()) throw new Error('License key is invalid.');
-    const data = fresh.data() as LicenseRecord;
-    if (data.status === 'revoked') throw new Error('License key has been revoked.');
-    if (data.status === 'expired' || isExpired(data.expiresAt)) {
-      transaction.update(ref, { status: 'expired', lastCheckedAt: new Date().toISOString() });
-      throw new Error('License key has expired.');
-    }
-    if (data.deviceId && data.deviceId !== deviceId) {
-      throw new Error('License key is already active on another device.');
-    }
-
-    const now = new Date().toISOString();
-    transaction.update(ref, {
-      status: data.status === 'unused' ? 'active' : data.status,
-      activatedAt: data.activatedAt || now,
-      deviceId,
-      lastCheckedAt: now,
-    });
-  });
-
-  localStorage.setItem(LICENSE_KEY_STORAGE, key);
-  const updated = await getDoc(ref);
-  return { id: updated.id, ...updated.data() } as LicenseRecord;
+  return license;
 }

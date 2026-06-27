@@ -74,7 +74,7 @@ Open the Vite URL, usually `http://localhost:5173`.
 
 The public DR123 app opens directly to Login/Register. Existing users sign in with Firebase Authentication email/password accounts.
 
-New users register with name, email, password, and a valid DR123 license key. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`. During registration, DR123 creates the Firebase Auth user, activates/binds the license, and creates the user document in one Firestore transaction. If license registration fails, the temporary Auth user is deleted.
+New users register with name, email, password, and a valid DR123 license key. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`. During registration, DR123 creates the Firebase Auth user, binds the license to that account, and creates the user document in one Firestore transaction. If license registration fails, the temporary Auth user is deleted.
 
 ## Build
 
@@ -111,7 +111,9 @@ licenses/{key}
   expiresAt: ISO string
   clinicName: string
   contactPhone: string
-  deviceId: string
+  deviceId: string (legacy; not used for access checks)
+  ownerUid: string
+  ownerEmail: string
   lastCheckedAt: ISO string
 
 admins/{uid}

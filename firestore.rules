@@ -17,10 +17,18 @@ service cloud.firestore {
     function publicLicenseUpdate() {
       return signedIn()
         && resource.data.status in ['unused', 'active']
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'activatedAt', 'deviceId', 'lastCheckedAt'])
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'activatedAt', 'ownerUid', 'ownerEmail', 'lastCheckedAt'])
         && request.resource.data.status in ['active', 'expired']
-        && request.resource.data.deviceId is string
-        && request.resource.data.lastCheckedAt is string;
+        && request.resource.data.lastCheckedAt is string
+        && (
+          request.resource.data.status == 'expired'
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastCheckedAt'])
+          || (
+            request.resource.data.ownerUid == request.auth.uid
+            && request.resource.data.ownerEmail is string
+            && (resource.data.status == 'unused' || resource.data.ownerUid == request.auth.uid)
+          )
+        );
     }
 
     match /admins/{adminId} {

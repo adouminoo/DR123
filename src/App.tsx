@@ -87,10 +87,101 @@ type Tab = 'dashboard' | 'calendar' | 'patients' | 'services' | 'waiting' | 'rev
 type Language = 'en' | 'fr' | 'ar';
 type RecentPatient = { patientId: string; name: string; openedAt: string };
 type DeletedItem = { collectionName: string; id: string; label: string; entityId: string; entity: AuditLog['entity']; deletedAt?: string };
+type BusinessType = 'general' | 'salon' | 'coaching' | 'repair' | 'consulting' | 'clinic' | 'studio' | 'agency';
+type BusinessProfile = {
+  id: 'business-profile';
+  businessName: string;
+  businessType: BusinessType;
+  phone: string;
+  address: string;
+  currency: string;
+  whatsappNumber: string;
+  receiptFooter: string;
+  clientLabel: string;
+  serviceLabel: string;
+  appointmentLabel: string;
+  setupComplete: boolean;
+  updatedAt: string;
+};
 
 const APP_NAME = 'Top Management You';
 const APP_LOGO = `${import.meta.env.BASE_URL}toplinkyou-logo.png`;
 const FOOTER_CREDIT = 'Made by toplinkyou 2026';
+const BUSINESS_PROFILE_ID = 'business-profile';
+
+const businessTypeOptions: Array<{ value: BusinessType; label: string; clientLabel: string; serviceLabel: string; appointmentLabel: string }> = [
+  { value: 'general', label: 'General appointments', clientLabel: 'Clients', serviceLabel: 'Services', appointmentLabel: 'Rendez-vous' },
+  { value: 'salon', label: 'Salon / beauty', clientLabel: 'Clients', serviceLabel: 'Services', appointmentLabel: 'Bookings' },
+  { value: 'coaching', label: 'Coaching / classes', clientLabel: 'Clients', serviceLabel: 'Programs', appointmentLabel: 'Sessions' },
+  { value: 'repair', label: 'Repair / maintenance', clientLabel: 'Customers', serviceLabel: 'Jobs', appointmentLabel: 'Jobs' },
+  { value: 'consulting', label: 'Consulting', clientLabel: 'Clients', serviceLabel: 'Services', appointmentLabel: 'Meetings' },
+  { value: 'clinic', label: 'Clinic / wellness', clientLabel: 'Clients', serviceLabel: 'Services', appointmentLabel: 'Appointments' },
+  { value: 'studio', label: 'Studio / creative', clientLabel: 'Clients', serviceLabel: 'Sessions', appointmentLabel: 'Bookings' },
+  { value: 'agency', label: 'Agency', clientLabel: 'Clients', serviceLabel: 'Services', appointmentLabel: 'Meetings' },
+];
+
+const defaultBusinessProfile: BusinessProfile = {
+  id: BUSINESS_PROFILE_ID,
+  businessName: APP_NAME,
+  businessType: 'general',
+  phone: '',
+  address: '',
+  currency: 'MAD',
+  whatsappNumber: '',
+  receiptFooter: 'Thank you.',
+  clientLabel: 'Clients',
+  serviceLabel: 'Services',
+  appointmentLabel: 'Rendez-vous',
+  setupComplete: false,
+  updatedAt: '',
+};
+
+function presetForBusinessType(type: BusinessType) {
+  return businessTypeOptions.find((item) => item.value === type) || businessTypeOptions[0];
+}
+
+function normalizeBusinessProfile(input?: Record<string, unknown>): BusinessProfile {
+  const type = businessTypeOptions.some((item) => item.value === input?.businessType) ? input?.businessType as BusinessType : defaultBusinessProfile.businessType;
+  const preset = presetForBusinessType(type);
+  return {
+    ...defaultBusinessProfile,
+    ...input,
+    id: BUSINESS_PROFILE_ID,
+    businessType: type,
+    clientLabel: String(input?.clientLabel || preset.clientLabel),
+    serviceLabel: String(input?.serviceLabel || preset.serviceLabel),
+    appointmentLabel: String(input?.appointmentLabel || preset.appointmentLabel),
+    setupComplete: Boolean(input?.setupComplete),
+    updatedAt: String(input?.updatedAt || ''),
+  };
+}
+
+function parseTags(input: string) {
+  return input.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 8);
+}
+
+function remainingBalance(appointment: Pick<Appointment, 'revenueAmount' | 'depositAmount' | 'paid'>) {
+  if (appointment.paid) return 0;
+  return Math.max(0, Number(appointment.revenueAmount || 0) - Number(appointment.depositAmount || 0));
+}
+
+function collectedAmount(appointment: Pick<Appointment, 'revenueAmount' | 'depositAmount' | 'paid'>) {
+  return appointment.paid ? Number(appointment.revenueAmount || 0) : Number(appointment.depositAmount || 0);
+}
+
+function toLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addRecurrenceDate(date: string, index: number, rule: Appointment['recurrenceRule']) {
+  const next = new Date(`${date}T00:00:00`);
+  if (rule === 'weekly') next.setDate(next.getDate() + index * 7);
+  if (rule === 'monthly') next.setMonth(next.getMonth() + index);
+  return toLocalIsoDate(next);
+}
 
 const emptyPatient: Patient = {
   id: '',
@@ -122,6 +213,9 @@ const emptyAppointment: Appointment = {
   revenueAmount: 0,
   paid: false,
   paymentMethod: 'Cash',
+  recurrenceRule: 'none',
+  recurrenceCount: 1,
+  recurringGroupId: '',
   createdAt: '',
   updatedAt: '',
 };
@@ -561,13 +655,13 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
   return (
     <section className={`auth-visual ${isLicense ? 'auth-visual-license' : ''}`}>
       <div className="auth-visual-topline">
-        <div className="auth-mark">DR123</div>
+        <div className="auth-mark">TMY</div>
         <span>{isLicense ? 'License security layer' : 'Appointment command workspace'}</span>
       </div>
       <div className="auth-hero-copy">
         <p className="auth-kicker">{isLicense ? 'Protected registration' : 'Premium appointment operations'}</p>
         <h2>{isLicense ? 'Verify access before the workspace opens.' : 'A secure command center for modern appointment teams.'}</h2>
-        <p>{isLicense ? 'License status, device trust, and account access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, client data confidence, and daily schedule control.'}</p>
+        <p>{isLicense ? 'License status, account trust, and secure access are presented as one calm enterprise-grade gateway.' : 'A polished Top Management You entry experience built around trust, client data confidence, and daily schedule control.'}</p>
       </div>
       <div className="auth-art" aria-hidden="true">
         <div className="auth-art-grid" />
@@ -582,7 +676,7 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
         </div>
         <div className="auth-fragment auth-fragment-b">
           <span />
-          <strong>{isLicense ? 'Device binding' : 'Client timeline'}</strong>
+          <strong>{isLicense ? 'Account license' : 'Client timeline'}</strong>
           <i />
           <i />
           <i />
@@ -660,7 +754,7 @@ function Login({
             <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="auth-logo" />
             <div>
               <h1 className="auth-title">{APP_NAME}</h1>
-              <p className="text-sm font-medium text-slate-300">DR123 account access</p>
+              <p className="text-sm font-medium text-slate-300">Top Management You account access</p>
             </div>
           </div>
           <p className="auth-copy">Existing users can login with email and password. New users register once with a valid license key.</p>
@@ -680,7 +774,7 @@ function Login({
           </>
         )}
         <label className="auth-label">Email</label>
-        <input className="input mt-2 mb-3" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
+        <input className="input mt-2 mb-3" type="text" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
         <label className="auth-label">{t.password}</label>
         <input className="input mt-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         {mode === 'register' && (
@@ -694,10 +788,68 @@ function Login({
         )}
         {error && <p className="auth-alert">{error}</p>}
         <button className="btn-primary mt-6 w-full" disabled={loading}>{loading ? t.checking : mode === 'register' ? 'Create account' : t.login}</button>
-        <p className="auth-footer-note">Need access? Contact your DR123 license owner.</p>
+        <p className="auth-footer-note">Need access? Contact your license owner.</p>
       </form>
       </div>
     </main>
+  );
+}
+
+function BusinessProfileFields({ profile, setProfile }: { profile: BusinessProfile; setProfile: (profile: BusinessProfile) => void }) {
+  function applyType(type: BusinessType) {
+    const preset = presetForBusinessType(type);
+    setProfile({ ...profile, businessType: type, clientLabel: preset.clientLabel, serviceLabel: preset.serviceLabel, appointmentLabel: preset.appointmentLabel });
+  }
+
+  return (
+    <>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="text-sm font-semibold">Business name<input className="input mt-2" value={profile.businessName} onChange={(event) => setProfile({ ...profile, businessName: event.target.value })} /></label>
+        <label className="text-sm font-semibold">Business type<select className="input mt-2" value={profile.businessType} onChange={(event) => applyType(event.target.value as BusinessType)}>{businessTypeOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="text-sm font-semibold">Client label<input className="input mt-2" value={profile.clientLabel} onChange={(event) => setProfile({ ...profile, clientLabel: event.target.value })} /></label>
+        <label className="text-sm font-semibold">Service label<input className="input mt-2" value={profile.serviceLabel} onChange={(event) => setProfile({ ...profile, serviceLabel: event.target.value })} /></label>
+        <label className="text-sm font-semibold">Appointment label<input className="input mt-2" value={profile.appointmentLabel} onChange={(event) => setProfile({ ...profile, appointmentLabel: event.target.value })} /></label>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <label className="text-sm font-semibold">Phone<input className="input mt-2" value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+        <label className="text-sm font-semibold">WhatsApp number<input className="input mt-2" value={profile.whatsappNumber} onChange={(event) => setProfile({ ...profile, whatsappNumber: event.target.value })} /></label>
+        <label className="text-sm font-semibold">Currency<input className="input mt-2 uppercase" value={profile.currency} onChange={(event) => setProfile({ ...profile, currency: event.target.value })} /></label>
+      </div>
+      <label className="text-sm font-semibold">Address<input className="input mt-2" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} /></label>
+      <label className="text-sm font-semibold">Receipt footer<textarea className="input mt-2 min-h-20" value={profile.receiptFooter} onChange={(event) => setProfile({ ...profile, receiptFooter: event.target.value })} /></label>
+    </>
+  );
+}
+
+function BusinessProfileForm({ profile, setProfile, onSubmit }: { profile: BusinessProfile; setProfile: (profile: BusinessProfile) => void; onSubmit: (event: React.FormEvent) => void }) {
+  return (
+    <form className="card space-y-4 p-5" onSubmit={onSubmit}>
+      <div>
+        <h3 className="section-title">Business profile</h3>
+        <p className="section-subtitle">Set labels and receipt details for your appointment business.</p>
+      </div>
+      <BusinessProfileFields profile={profile} setProfile={setProfile} />
+      <button className="btn-primary">Save business profile</button>
+    </form>
+  );
+}
+
+function SetupWizard({ profile, setProfile, onSubmit, onSkip }: { profile: BusinessProfile; setProfile: (profile: BusinessProfile) => void; onSubmit: (event: React.FormEvent) => void; onSkip: () => void }) {
+  return (
+    <form className="setup-wizard space-y-4" onSubmit={onSubmit}>
+      <div className="panel-heading">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">First run setup</p>
+          <h3 className="section-title mt-1">Make Top Management You match your business</h3>
+          <p className="section-subtitle">Choose your business type once. You can change all labels later in Settings.</p>
+        </div>
+        <button type="button" className="btn-secondary" onClick={onSkip}>Later</button>
+      </div>
+      <BusinessProfileFields profile={profile} setProfile={setProfile} />
+      <button className="btn-primary">Finish setup</button>
+    </form>
   );
 }
 
@@ -730,7 +882,7 @@ function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: Licens
       <div className="panel-heading">
         <div>
           <h3 className="section-title">License status</h3>
-          <p className="section-subtitle">Current workspace access and device binding.</p>
+          <p className="section-subtitle">Current workspace access and account license.</p>
         </div>
         {license && <span className={statusClass}>{license.status}</span>}
       </div>
@@ -753,7 +905,7 @@ function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: Licens
 }
 
 export default function App() {
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
+  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('tmy_language') as Language) || (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
   const rtl = language === 'ar';
   const [user, setUser] = useState<AppUser | null>(null);
@@ -761,7 +913,7 @@ export default function App() {
   const registrationPendingRef = useRef(false);
   const [authError, setAuthError] = useState('');
   const [license, setLicense] = useState<LicenseRecord | null>(null);
-  const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
+  const [dark, setDark] = useState(() => (localStorage.getItem('tmy_theme') || localStorage.getItem('dr123_theme')) === 'dark');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [query, setQuery] = useState('');
   const [patientsRaw, setPatientsRaw] = useState<Patient[]>([]);
@@ -773,6 +925,9 @@ export default function App() {
   const [timelineNotes, setTimelineNotes] = useState<TimelineNote[]>([]);
   const [settingsBackup, setSettingsBackup] = useState<Record<string, unknown>[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(defaultBusinessProfile);
+  const [businessForm, setBusinessForm] = useState<BusinessProfile>(defaultBusinessProfile);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [patientForm, setPatientForm] = useState<Patient>(emptyPatient);
   const [appointmentForm, setAppointmentForm] = useState<Appointment>(emptyAppointment);
   const [serviceForm, setServiceForm] = useState<Service>(emptyService);
@@ -781,13 +936,13 @@ export default function App() {
   const [editingAppointment, setEditingAppointment] = useState(false);
   const [editingService, setEditingService] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState('');
-  const [recentPatients, setRecentPatients] = useState<RecentPatient[]>(() => JSON.parse(localStorage.getItem('dr123_recent_patients') || '[]'));
+  const [recentPatients, setRecentPatients] = useState<RecentPatient[]>(() => JSON.parse(localStorage.getItem('tmy_recent_clients') || localStorage.getItem('dr123_recent_patients') || '[]'));
   const [message, setMessage] = useState('');
   const [quickInput, setQuickInput] = useState('');
   const [draftPrompt, setDraftPrompt] = useState(false);
   const [pendingImport, setPendingImport] = useState<PreparedBackupImport | null>(null);
   const [lastBackup, setLastBackup] = useState<{ at: string; content: string } | null>(() => {
-    const saved = localStorage.getItem('dr123_last_backup');
+    const saved = localStorage.getItem('tmy_last_backup') || localStorage.getItem('dr123_last_backup');
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -795,6 +950,13 @@ export default function App() {
   const appointments = useMemo(() => appointmentsRaw.filter((item) => !item.deleted), [appointmentsRaw]);
   const services = useMemo(() => servicesRaw.filter((item) => !item.deleted), [servicesRaw]);
   const treatments = useMemo(() => treatmentsRaw.filter((item) => !item.deleted), [treatmentsRaw]);
+  const businessPreset = presetForBusinessType(businessProfile.businessType);
+  const businessLabels = {
+    clients: businessProfile.clientLabel || businessPreset.clientLabel,
+    services: businessProfile.serviceLabel || businessPreset.serviceLabel,
+    appointments: businessProfile.appointmentLabel || businessPreset.appointmentLabel,
+  };
+  const money = (amount: number) => new Intl.NumberFormat('fr-MA', { style: 'currency', currency: businessProfile.currency || 'MAD' }).format(amount || 0);
 
   async function load() {
     const [patientRows, appointmentRows, paymentRows, treatmentRows, serviceRows, categoryRows, noteRows, auditRows, settingRows] = await Promise.all([
@@ -817,6 +979,10 @@ export default function App() {
     setTimelineNotes(noteRows.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     setAuditLogs(auditRows.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     setSettingsBackup(settingRows);
+    const loadedProfile = normalizeBusinessProfile(settingRows.find((item) => item.id === BUSINESS_PROFILE_ID));
+    setBusinessProfile(loadedProfile);
+    setBusinessForm(loadedProfile);
+    setShowSetupWizard(!loadedProfile.setupComplete);
     await purgeOldDeleted([
       ...patientRows.map((item) => ({ collectionName: 'patients', id: item.id, deletedAt: item.deletedAt, entity: 'patient' as const, entityId: item.patientId })),
       ...appointmentRows.map((item) => ({ collectionName: 'appointments', id: item.id, deletedAt: item.deletedAt, entity: 'appointment' as const, entityId: item.appointmentId })),
@@ -846,8 +1012,8 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     document.documentElement.dir = rtl ? 'rtl' : 'ltr';
     document.documentElement.lang = language;
-    localStorage.setItem('dr123_theme', dark ? 'dark' : 'light');
-    localStorage.setItem('dr123_language', language);
+    localStorage.setItem('tmy_theme', dark ? 'dark' : 'light');
+    localStorage.setItem('tmy_language', language);
   }, [dark, language, rtl]);
 
   useEffect(() => {
@@ -867,15 +1033,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const draft = localStorage.getItem('dr123_appointment_draft');
+    const draft = localStorage.getItem('tmy_appointment_draft') || localStorage.getItem('dr123_appointment_draft');
     if (draft) setDraftPrompt(true);
   }, []);
 
   useEffect(() => {
     if (!user) return;
     const payload = JSON.stringify({ savedAt: nowIso(), editing: editingAppointment, form: appointmentForm });
-    localStorage.setItem('dr123_appointment_draft', payload);
-    const timer = window.setInterval(() => localStorage.setItem('dr123_appointment_draft', payload), 4000);
+    localStorage.setItem('tmy_appointment_draft', payload);
+    const timer = window.setInterval(() => localStorage.setItem('tmy_appointment_draft', payload), 4000);
     return () => window.clearInterval(timer);
   }, [appointmentForm, editingAppointment, user]);
 
@@ -896,18 +1062,19 @@ export default function App() {
   }, [appointments, query]);
 
   const revenue = useMemo(() => {
-    const paidAppointments = appointments.filter((item) => item.paid);
     const sum = (rows: Appointment[]) => rows.reduce((total, item) => total + Number(item.revenueAmount || 0), 0);
+    const sumCollected = (rows: Appointment[]) => rows.reduce((total, item) => total + collectedAmount(item), 0);
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     const today = todayIso();
     return {
-      today: sum(paidAppointments.filter((item) => item.date === today)),
-      week: sum(paidAppointments.filter((item) => toDateTime(item.date, item.time) >= startOfWeek)),
-      month: sum(paidAppointments.filter((item) => item.date.slice(0, 7) === today.slice(0, 7))),
-      year: sum(paidAppointments.filter((item) => item.date.slice(0, 4) === today.slice(0, 4))),
-      outstanding: sum(appointments.filter((item) => !item.paid && item.revenueAmount > 0)),
+      today: sumCollected(appointments.filter((item) => item.date === today)),
+      week: sumCollected(appointments.filter((item) => toDateTime(item.date, item.time) >= startOfWeek)),
+      month: sumCollected(appointments.filter((item) => item.date.slice(0, 7) === today.slice(0, 7))),
+      year: sumCollected(appointments.filter((item) => item.date.slice(0, 4) === today.slice(0, 4))),
+      outstanding: appointments.reduce((total, item) => total + remainingBalance(item), 0),
+      booked: sum(appointments),
     };
   }, [appointments]);
 
@@ -936,6 +1103,7 @@ export default function App() {
   function resetAppointmentForm(date = todayIso(), time = '09:00') {
     setAppointmentForm({ ...emptyAppointment, date, time });
     setEditingAppointment(false);
+    localStorage.removeItem('tmy_appointment_draft');
     localStorage.removeItem('dr123_appointment_draft');
     setDraftPrompt(false);
   }
@@ -951,14 +1119,14 @@ export default function App() {
     setEditingPatient(true);
     const next = [{ patientId: patient.patientId, name: patient.name, openedAt: nowIso() }, ...recentPatients.filter((item) => item.patientId !== patient.patientId)].slice(0, 8);
     setRecentPatients(next);
-    localStorage.setItem('dr123_recent_patients', JSON.stringify(next));
+    localStorage.setItem('tmy_recent_clients', JSON.stringify(next));
   }
 
   async function savePatient(event: React.FormEvent) {
     event.preventDefault();
     const stamp = nowIso();
     const isNew = !patientForm.id;
-    const patient: Patient = { ...patientForm, id: patientForm.id || crypto.randomUUID(), patientId: patientForm.patientId || makePatientId(patientsRaw.length), age: Number(patientForm.age || 0), createdAt: patientForm.createdAt || stamp, updatedAt: stamp, deleted: false };
+    const patient: Patient = { ...patientForm, id: patientForm.id || crypto.randomUUID(), patientId: patientForm.patientId || makePatientId(patientsRaw.length), age: Number(patientForm.age || 0), tags: patientForm.tags || [], createdAt: patientForm.createdAt || stamp, updatedAt: stamp, deleted: false };
     await upsertPatient(patient, isNew);
     openPatient(patient);
     await load();
@@ -969,6 +1137,11 @@ export default function App() {
     const patient = patients.find((item) => item.patientId === appointmentForm.patientId);
     const stamp = nowIso();
     const isNew = !appointmentForm.id;
+    const recurrenceRule = appointmentForm.recurrenceRule || 'none';
+    const recurrenceCount = isNew && recurrenceRule !== 'none'
+      ? Math.max(1, Math.min(52, Number(appointmentForm.recurrenceCount || 1)))
+      : 1;
+    const recurringGroupId = recurrenceCount > 1 ? crypto.randomUUID() : appointmentForm.recurringGroupId || '';
     const appointment: Appointment = {
       ...appointmentForm,
       id: appointmentForm.id || crypto.randomUUID(),
@@ -976,19 +1149,44 @@ export default function App() {
       patientName: patient?.name || appointmentForm.patientName,
       duration: Number(appointmentForm.duration || 30),
       revenueAmount: Number(appointmentForm.revenueAmount || 0),
+      depositAmount: Math.max(0, Math.min(Number(appointmentForm.depositAmount || 0), Number(appointmentForm.revenueAmount || 0))),
+      recurrenceRule: recurrenceCount > 1 ? recurrenceRule : 'none',
+      recurrenceCount,
+      recurringGroupId,
       createdAt: appointmentForm.createdAt || stamp,
       updatedAt: stamp,
       deleted: false,
     };
-    if (overlaps(appointment, appointments)) {
+    appointment.paid = appointment.paid || remainingBalance(appointment) === 0;
+    const appointmentsToSave = Array.from({ length: recurrenceCount }, (_, index): Appointment => {
+      const repeated = index === 0 ? appointment : {
+        ...appointment,
+        id: crypto.randomUUID(),
+        appointmentId: makeAppointmentId(appointmentsRaw.length + index),
+        date: addRecurrenceDate(appointment.date, index, recurrenceRule),
+        depositAmount: 0,
+        paid: false,
+        createdAt: stamp,
+        updatedAt: stamp,
+      };
+      repeated.paid = repeated.paid || remainingBalance(repeated) === 0;
+      return repeated;
+    });
+
+    const hasOverlap = appointmentsToSave.some((candidate, index) => overlaps(candidate, [...appointments, ...appointmentsToSave.slice(0, index)]));
+    if (hasOverlap) {
       setMessage('Appointment overlaps another active appointment.');
       return;
     }
-    if (appointment.paid && appointment.revenueAmount > 0) {
-      await upsertAppointmentWithPayment(appointment, isNew);
-    } else {
-      await upsertAppointment(appointment, isNew);
+    for (const item of appointmentsToSave) {
+      const itemIsNew = item.id !== appointmentForm.id;
+      if (item.paid && item.revenueAmount > 0) {
+        await upsertAppointmentWithPayment(item, itemIsNew);
+      } else {
+        await upsertAppointment(item, itemIsNew);
+      }
     }
+    if (appointmentsToSave.length > 1) setMessage(`Created ${appointmentsToSave.length} recurring appointments.`);
     resetAppointmentForm();
     await load();
   }
@@ -1056,13 +1254,13 @@ export default function App() {
   }
 
   function copyReminder(appointment: Appointment) {
-    const text = `Bonjour ${appointment.patientName}, rappel de votre rendez-vous DR123 le ${appointment.date} a ${appointment.time}. Merci.`;
+    const text = `Bonjour ${appointment.patientName}, rappel de votre rendez-vous Top Management You le ${appointment.date} a ${appointment.time}. Merci.`;
     navigator.clipboard.writeText(text);
     setMessage('Reminder copied.');
   }
 
   function paymentReminderText(appointment: Appointment) {
-    return `Bonjour ${appointment.patientName}, rappel paiement DR123: ${formatMad(appointment.revenueAmount)} pour ${appointment.serviceName || appointment.treatmentPerformed || 'votre rendez-vous'} du ${appointment.date}. Merci.`;
+    return `Bonjour ${appointment.patientName}, rappel paiement Top Management You: ${formatMad(appointment.revenueAmount)} pour ${appointment.serviceName || appointment.treatmentPerformed || 'votre rendez-vous'} du ${appointment.date}. Merci.`;
   }
 
   function copyPaymentReminder(appointment: Appointment) {
@@ -1073,7 +1271,7 @@ export default function App() {
   function whatsappLink(appointment: Appointment) {
     const patient = patients.find((item) => item.patientId === appointment.patientId);
     const phone = (patient?.phone || '').replace(/\D/g, '');
-    const text = encodeURIComponent(`Bonjour ${appointment.patientName}, rappel de votre rendez-vous DR123 le ${appointment.date} a ${appointment.time}. Merci.`);
+    const text = encodeURIComponent(`Bonjour ${appointment.patientName}, rappel de votre rendez-vous Top Management You le ${appointment.date} a ${appointment.time}. Merci.`);
     return `https://wa.me/${phone}?text=${text}`;
   }
 
@@ -1094,12 +1292,15 @@ export default function App() {
       service: escapeHtml(appointment.serviceName || appointment.treatmentPerformed || '-'),
       paymentMethod: escapeHtml(appointment.paymentMethod),
       status: appointment.paid ? 'Paid' : 'Unpaid',
+      deposit: money(Number(appointment.depositAmount || 0)),
+      balance: money(remainingBalance(appointment)),
     };
     const html = `<!doctype html>
 <html>
 <head><meta charset="utf-8"><title>${status} ${receipt.appointmentId}</title></head>
 <body style="font-family:Arial,sans-serif;margin:40px;color:#0f172a">
-  <h1 style="margin:0 0 8px">DR123 ${status}</h1>
+  <h1 style="margin:0 0 8px">${escapeHtml(businessProfile.businessName || APP_NAME)} ${status}</h1>
+  <p style="margin:0 0 8px;color:#64748b">${escapeHtml([businessProfile.phone, businessProfile.address].filter(Boolean).join(' · '))}</p>
   <p style="margin:0 0 24px;color:#64748b">Generated ${new Date().toLocaleString()}</p>
   <table style="width:100%;border-collapse:collapse;font-size:14px">
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Appointment</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right"><b>${receipt.appointmentId}</b></td></tr>
@@ -1108,13 +1309,59 @@ export default function App() {
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.dateTime}</td></tr>
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Service</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.service}</td></tr>
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Payment method</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.paymentMethod}</td></tr>
-    <tr><td style="padding:12px 8px;font-size:18px">Total</td><td style="padding:12px 8px;text-align:right;font-size:18px"><b>${formatMad(appointment.revenueAmount)}</b></td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Deposit</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.deposit}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Balance due</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.balance}</td></tr>
+    <tr><td style="padding:12px 8px;font-size:18px">Total</td><td style="padding:12px 8px;text-align:right;font-size:18px"><b>${money(appointment.revenueAmount)}</b></td></tr>
     <tr><td style="padding:8px">Status</td><td style="padding:8px;text-align:right">${receipt.status}</td></tr>
   </table>
+  <p style="margin-top:28px;color:#64748b">${escapeHtml(businessProfile.receiptFooter || FOOTER_CREDIT)}</p>
 </body>
 </html>`;
     downloadFile(`${status.toLowerCase()}-${appointment.appointmentId}.html`, html, 'text/html');
     setMessage(`${status} downloaded.`);
+  }
+
+  function downloadRevenueReport(period: 'daily' | 'monthly') {
+    const today = todayIso();
+    const title = period === 'daily' ? 'Daily closeout report' : 'Monthly revenue report';
+    const rows = appointments.filter((item) => period === 'daily' ? item.date === today : item.date.slice(0, 7) === today.slice(0, 7));
+    const completed = rows.filter((item) => item.status === 'Completed').length;
+    const noShows = rows.filter((item) => item.status === 'No Show').length;
+    const collected = rows.reduce((total, item) => total + collectedAmount(item), 0);
+    const outstanding = rows.reduce((total, item) => total + remainingBalance(item), 0);
+    const topClients = Object.entries(rows.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.patientName]: (acc[item.patientName] || 0) + collectedAmount(item) }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topServices = Object.entries(rows.reduce<Record<string, number>>((acc, item) => {
+      const label = item.serviceName || item.treatmentPerformed || 'Unspecified';
+      return { ...acc, [label]: (acc[label] || 0) + 1 };
+    }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const appointmentRows = rows.map((item) => `<tr><td>${escapeHtml(item.date)} ${escapeHtml(item.time)}</td><td>${escapeHtml(item.patientName)}</td><td>${escapeHtml(item.serviceName || item.treatmentPerformed || '-')}</td><td>${escapeHtml(item.status)}</td><td style="text-align:right">${money(collectedAmount(item))}</td><td style="text-align:right">${money(remainingBalance(item))}</td></tr>`).join('');
+    const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>${title}</title></head>
+<body style="font-family:Arial,sans-serif;margin:40px;color:#0f172a">
+  <h1 style="margin:0 0 8px">${escapeHtml(businessProfile.businessName || APP_NAME)} - ${title}</h1>
+  <p style="margin:0 0 24px;color:#64748b">Generated ${new Date().toLocaleString()}</p>
+  <section style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px">
+    ${[
+      ['Appointments', rows.length],
+      ['Completed', completed],
+      ['No-shows', noShows],
+      ['Collected', money(collected)],
+      ['Outstanding', money(outstanding)],
+    ].map(([label, value]) => `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px"><p style="margin:0;color:#64748b;font-size:12px">${escapeHtml(label)}</p><b style="font-size:18px">${escapeHtml(value)}</b></div>`).join('')}
+  </section>
+  <section style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+    <div><h2 style="font-size:16px">Top clients</h2>${topClients.map(([label, value]) => `<p>${escapeHtml(label)} <b style="float:right">${money(value)}</b></p>`).join('') || '<p style="color:#64748b">No data</p>'}</div>
+    <div><h2 style="font-size:16px">Top services</h2>${topServices.map(([label, value]) => `<p>${escapeHtml(label)} <b style="float:right">${escapeHtml(value)}</b></p>`).join('') || '<p style="color:#64748b">No data</p>'}</div>
+  </section>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <thead><tr><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Date</th><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Client</th><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Service</th><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Status</th><th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:8px">Collected</th><th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:8px">Balance</th></tr></thead>
+    <tbody>${appointmentRows || '<tr><td colspan="6" style="padding:18px;color:#64748b">No appointments in this period.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`;
+    downloadFile(`${period}-revenue-report-${period === 'daily' ? today : today.slice(0, 7)}.html`, html, 'text/html');
+    setMessage(`${title} downloaded.`);
   }
 
   async function markPaid(appointment: Appointment) {
@@ -1187,12 +1434,39 @@ export default function App() {
     await load();
   }
 
+  async function saveBusinessProfile(event: React.FormEvent, completeSetup = false) {
+    event.preventDefault();
+    const preset = presetForBusinessType(businessForm.businessType);
+    const next: BusinessProfile = {
+      ...businessForm,
+      id: BUSINESS_PROFILE_ID,
+      businessName: businessForm.businessName.trim() || APP_NAME,
+      phone: businessForm.phone.trim(),
+      address: businessForm.address.trim(),
+      currency: (businessForm.currency || 'MAD').trim().toUpperCase(),
+      whatsappNumber: businessForm.whatsappNumber.trim(),
+      receiptFooter: businessForm.receiptFooter.trim() || defaultBusinessProfile.receiptFooter,
+      clientLabel: businessForm.clientLabel.trim() || preset.clientLabel,
+      serviceLabel: businessForm.serviceLabel.trim() || preset.serviceLabel,
+      appointmentLabel: businessForm.appointmentLabel.trim() || preset.appointmentLabel,
+      setupComplete: completeSetup || businessForm.setupComplete,
+      updatedAt: nowIso(),
+    };
+    await setDoc(scopedDoc('settings', BUSINESS_PROFILE_ID), next);
+    await createAudit('Settings changed', 'settings', BUSINESS_PROFILE_ID, 'Business profile updated.');
+    setBusinessProfile(next);
+    setBusinessForm(next);
+    setShowSetupWizard(false);
+    setMessage('Business profile saved.');
+    await load();
+  }
+
   async function createBackup() {
     const content = await exportBackup(backup);
     const at = nowIso();
     const next = { at, content };
     setLastBackup(next);
-    localStorage.setItem('dr123_last_backup', JSON.stringify(next));
+    localStorage.setItem('tmy_last_backup', JSON.stringify(next));
     downloadFile(`backup-${todayIso()}.json`, content, 'application/json');
     await createAudit('Backup exported', 'backup', `backup-${Date.now()}`, 'Daily JSON backup exported.');
     await load();
@@ -1203,7 +1477,7 @@ export default function App() {
   }
 
   function exportCsv() {
-    downloadFile(`dr123-appointments-${todayIso()}.csv`, toCsv(appointments as unknown as Record<string, unknown>[]), 'text/csv');
+    downloadFile(`top-management-you-appointments-${todayIso()}.csv`, toCsv(appointments as unknown as Record<string, unknown>[]), 'text/csv');
   }
 
   async function handleImport(file?: File) {
@@ -1235,7 +1509,7 @@ export default function App() {
   }
 
   function restoreDraft() {
-    const draft = localStorage.getItem('dr123_appointment_draft');
+    const draft = localStorage.getItem('tmy_appointment_draft') || localStorage.getItem('dr123_appointment_draft');
     if (!draft) return;
     const parsed = JSON.parse(draft) as { editing: boolean; form: Appointment };
     setAppointmentForm(parsed.form);
@@ -1265,7 +1539,7 @@ export default function App() {
 
   const navGroups: Array<{ label: string; items: Array<[Tab, typeof Activity, string]> }> = [
     { label: 'Command', items: [['dashboard', Activity, t.dashboard], ['calendar', CalendarDays, t.calendar], ['waiting', Users, t.waiting]] },
-    { label: 'Workspace data', items: [['patients', Users, t.patients], ['services', Stethoscope, t.services]] },
+    { label: 'Workspace data', items: [['patients', Users, businessLabels.clients], ['services', Stethoscope, businessLabels.services]] },
     { label: 'Business', items: [['revenue', WalletCards, t.revenue], ['stats', Activity, t.stats]] },
     { label: 'System', items: [['backup', Database, t.backup], ['recycle', Archive, t.recycle], ['audit', Database, t.audit], ['settings', Settings, t.settings]] },
   ];
@@ -1280,8 +1554,8 @@ export default function App() {
         <div className="flex items-center gap-3">
           <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-12 w-12 rounded-lg border border-slate-200 bg-white object-contain p-1.5 shadow-soft" />
           <div>
-            <h1 className="text-lg font-bold leading-tight tracking-normal">{APP_NAME}</h1>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">DR123</p>
+            <h1 className="text-lg font-bold leading-tight tracking-normal">{businessProfile.businessName || APP_NAME}</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">Top Management You</p>
           </div>
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{t.clinicManagement}</p>
@@ -1331,7 +1605,8 @@ export default function App() {
 
         <main className="space-y-6 p-4 md:p-6 xl:p-8">
           {message && <button className="surface w-full p-3 text-left text-sm font-medium text-brand-700 dark:text-blue-300" onClick={() => setMessage('')}>{message}</button>}
-          {draftPrompt && <div className="surface flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{t.restoreDraft}</span><div className="flex gap-2"><button className="btn-primary" onClick={restoreDraft}>{t.restore}</button><button className="btn-secondary" onClick={() => { localStorage.removeItem('dr123_appointment_draft'); setDraftPrompt(false); }}>{t.discard}</button></div></div>}
+          {showSetupWizard && <SetupWizard profile={businessForm} setProfile={setBusinessForm} onSubmit={(event) => saveBusinessProfile(event, true)} onSkip={() => setShowSetupWizard(false)} />}
+          {draftPrompt && <div className="surface flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{t.restoreDraft}</span><div className="flex gap-2"><button className="btn-primary" onClick={restoreDraft}>{t.restore}</button><button className="btn-secondary" onClick={() => { localStorage.removeItem('tmy_appointment_draft'); localStorage.removeItem('dr123_appointment_draft'); setDraftPrompt(false); }}>{t.discard}</button></div></div>}
 
           {tab === 'dashboard' && (
             <>
@@ -1347,11 +1622,11 @@ export default function App() {
                 </div>
               </section>
               <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <StatCard label={t.todayRevenue} value={formatMad(revenue.today)} icon={WalletCards} detail="Paid today" tone="success" featured />
-                <StatCard label={t.weekRevenue} value={formatMad(revenue.week)} icon={WalletCards} detail="Current week" />
-                <StatCard label={t.monthRevenue} value={formatMad(revenue.month)} icon={WalletCards} detail="Current month" />
-                <StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} detail="Open balance" tone="warning" />
-                <StatCard label={t.patients} value={String(patients.length)} icon={Users} detail="Active records" tone="neutral" />
+                <StatCard label={t.todayRevenue} value={money(revenue.today)} icon={WalletCards} detail="Collected today" tone="success" featured />
+                <StatCard label={t.weekRevenue} value={money(revenue.week)} icon={WalletCards} detail="Collected this week" />
+                <StatCard label={t.monthRevenue} value={money(revenue.month)} icon={WalletCards} detail="Collected this month" />
+                <StatCard label={t.outstanding} value={money(revenue.outstanding)} icon={WalletCards} detail="Remaining balance" tone="warning" />
+                <StatCard label={businessLabels.clients} value={String(patients.length)} icon={Users} detail="Active records" tone="neutral" />
               </section>
               <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
                 <div className="space-y-4">
@@ -1380,7 +1655,7 @@ export default function App() {
             <section className="grid gap-4 xl:grid-cols-[360px_1fr]">
               <PatientForm t={t} form={patientForm} setForm={setPatientForm} editing={editingPatient} onSubmit={savePatient} onReset={resetPatientForm} />
               <div className="space-y-4">
-                <PatientsTable t={t} patients={filteredPatients} appointments={appointments} onOpen={openPatient} onDelete={async (patient) => { await softDelete('patients', patient.id, patient.patientId, 'patient', patient.name); await load(); }} />
+                <PatientsTable t={t} clientLabel={businessLabels.clients} patients={filteredPatients} appointments={appointments} onOpen={openPatient} onDelete={async (patient) => { await softDelete('patients', patient.id, patient.patientId, 'patient', patient.name); await load(); }} />
                 {selectedPatient && <PatientProfile t={t} patient={selectedPatient} appointments={appointments} payments={payments} notes={timelineNotes.filter((note) => note.patientId === selectedPatient.patientId)} onNote={addOrEditNote} onDeleteNote={async (note) => { await deleteTimelineNote(note); await load(); }} />}
               </div>
             </section>
@@ -1390,7 +1665,7 @@ export default function App() {
 
           {tab === 'waiting' && <WaitingRoom t={t} appointments={appointments.filter((item) => item.date === todayIso())} onMove={updateAppointmentStatus} />}
 
-          {tab === 'revenue' && <RevenuePage t={t} revenue={revenue} appointments={appointments} onMarkPaid={markPaid} onReceipt={downloadReceipt} />}
+          {tab === 'revenue' && <RevenuePage t={t} revenue={revenue} appointments={appointments} money={money} onMarkPaid={markPaid} onReceipt={downloadReceipt} onReport={downloadRevenueReport} />}
 
           {tab === 'stats' && <Stats t={t} appointments={appointments} patients={patients} />}
 
@@ -1436,11 +1711,14 @@ export default function App() {
           {tab === 'audit' && <AuditTable auditLogs={auditLogs} />}
 
           {tab === 'settings' && (
-            <section className="grid max-w-5xl gap-4 lg:grid-cols-[1fr_360px]">
-              <div className="card p-5">
-                <h3 className="section-title">{t.adminPassword}</h3>
-                <p className="section-subtitle">Update the password for the signed-in workspace account.</p>
-                <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
+            <section className="grid max-w-6xl gap-4 lg:grid-cols-[1fr_360px]">
+              <div className="space-y-4">
+                <BusinessProfileForm profile={businessForm} setProfile={setBusinessForm} onSubmit={(event) => saveBusinessProfile(event)} />
+                <div className="card p-5">
+                  <h3 className="section-title">{t.adminPassword}</h3>
+                  <p className="section-subtitle">Update the password for the signed-in workspace account.</p>
+                  <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
+                </div>
               </div>
               <LicenseStatusPanel license={license} userEmail={user.email} onRefresh={user ? () => openAppForUser(user) : undefined} />
             </section>
@@ -1520,7 +1798,7 @@ function RecentPatients({ t, recentPatients, patients, openPatient }: { t: Recor
 }
 
 function OutstandingPaymentsPanel({ appointments, onCopy, onMarkPaid, onReceipt, paymentWhatsappLink }: { appointments: Appointment[]; onCopy: (item: Appointment) => void; onMarkPaid: (item: Appointment) => void; onReceipt: (item: Appointment) => void; paymentWhatsappLink: (item: Appointment) => string }) {
-  const total = appointments.reduce((sum, item) => sum + Number(item.revenueAmount || 0), 0);
+  const total = appointments.reduce((sum, item) => sum + remainingBalance(item), 0);
   const overdue = appointments.filter((item) => daysSince(item.date) >= 7).length;
 
   return (
@@ -1539,7 +1817,7 @@ function OutstandingPaymentsPanel({ appointments, onCopy, onMarkPaid, onReceipt,
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold text-slate-950 dark:text-white">{item.patientName}</p>
-                <span className="badge-warning">{formatMad(item.revenueAmount)}</span>
+                <span className="badge-warning">{formatMad(remainingBalance(item))}</span>
                 <span className={daysSince(item.date) >= 7 ? 'badge-danger' : 'badge-info'}>{daysSince(item.date)}d open</span>
               </div>
               <p className="mt-1 truncate text-sm text-slate-500">{item.date} · {item.serviceName || item.treatmentPerformed || 'Appointment'} · {item.paymentMethod}</p>
@@ -1565,6 +1843,7 @@ function PatientForm({ t, form, setForm, editing, onSubmit, onReset }: { t: Reco
       <input className="input" placeholder={t.phone} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
       <div className="grid grid-cols-2 gap-3"><input className="input" type="number" placeholder={t.age} value={form.age || ''} onChange={(e) => setForm({ ...form, age: Number(e.target.value) })} /><select className="input" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as Patient['gender'] })}><option>Female</option><option>Male</option><option>Other</option></select></div>
       <input className="input" placeholder={t.address} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+      <input className="input" placeholder="Tags: VIP, Follow-up, Walk-in" value={(form.tags || []).join(', ')} onChange={(e) => setForm({ ...form, tags: parseTags(e.target.value) })} />
       <textarea className="input min-h-24" placeholder="Internal notes" value={form.medicalNotes} onChange={(e) => setForm({ ...form, medicalNotes: e.target.value })} />
       <div className="flex gap-2"><button className="btn-primary"><Plus className="h-4 w-4" />{t.save}</button><button type="button" className="btn-secondary" onClick={onReset}>{t.clear}</button></div>
     </form>
@@ -1583,9 +1862,19 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
       <select className="input" value={form.serviceId || ''} onChange={(e) => selectService(e.target.value)}><option value="">{t.serviceDropdown}</option>{services.filter((service) => service.active).map((service) => <option key={service.id} value={service.id}>{service.category} - {service.name}</option>)}</select>
       <div className="grid grid-cols-2 gap-3"><input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required /><input className="input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} required /></div>
       <div className="grid grid-cols-2 gap-3"><select className="input" value={durationOptions.includes(form.duration) ? form.duration : 0} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) || form.duration })}>{durationOptions.map((minutes) => <option key={minutes} value={minutes}>{minutes ? `${minutes}m` : t.custom}</option>)}</select><input className="input" type="number" min="1" value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <select className="input" value={form.recurrenceRule || 'none'} onChange={(e) => setForm({ ...form, recurrenceRule: e.target.value as Appointment['recurrenceRule'], recurrenceCount: e.target.value === 'none' ? 1 : form.recurrenceCount || 4 })} disabled={editing}>
+          <option value="none">No repeat</option>
+          <option value="weekly">Repeat weekly</option>
+          <option value="monthly">Repeat monthly</option>
+        </select>
+        <input className="input" type="number" min="1" max="52" placeholder="Repeats" value={form.recurrenceCount || 1} onChange={(e) => setForm({ ...form, recurrenceCount: Number(e.target.value) })} disabled={editing || (form.recurrenceRule || 'none') === 'none'} />
+      </div>
+      {editing && form.recurringGroupId && <p className="text-xs text-slate-500">Part of a recurring series. Changes apply to this rendez-vous only.</p>}
       <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AppointmentStatus })}>{statuses.map((status) => <option key={status} value={status}>{tStatus(status, t)}</option>)}</select>
       <input className="input" placeholder={t.treatment} value={form.treatmentPerformed} onChange={(e) => setForm({ ...form, treatmentPerformed: e.target.value })} />
-      <div className="grid grid-cols-2 gap-3"><input className="input" type="number" min="0" placeholder="Revenue DH" value={form.revenueAmount || ''} onChange={(e) => setForm({ ...form, revenueAmount: Number(e.target.value) })} /><select className="input" value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as PaymentMethod })}>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select></div>
+      <div className="grid grid-cols-2 gap-3"><input className="input" type="number" min="0" placeholder="Total amount" value={form.revenueAmount || ''} onChange={(e) => setForm({ ...form, revenueAmount: Number(e.target.value) })} /><input className="input" type="number" min="0" placeholder="Deposit paid" value={form.depositAmount || ''} onChange={(e) => setForm({ ...form, depositAmount: Number(e.target.value) })} /></div>
+      <select className="input" value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as PaymentMethod })}>{paymentMethods.map((method) => <option key={method}>{method}</option>)}</select>
       <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-800 dark:bg-slate-950"><input type="checkbox" checked={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.checked })} />{t.paid}</label>
       <textarea className="input min-h-20" placeholder={t.notes} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       <p className="text-xs text-slate-500">{t.draftSaved}</p>
@@ -1598,8 +1887,9 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
   );
 }
 
-function PatientsTable({ t, patients, appointments, onOpen, onDelete }: { t: Record<string, string>; patients: Patient[]; appointments: Appointment[]; onOpen: (patient: Patient) => void; onDelete: (patient: Patient) => void }) {
-  return <div className="table-wrap"><table className="data-table"><thead><tr><th>{t.patient}</th><th>{t.phone}</th><th>{t.history}</th><th></th></tr></thead><tbody>{patients.map((patient) => <tr key={patient.id}><td><b className="text-slate-950 dark:text-white">{patient.patientId}</b><br />{patient.name}<PatientAlerts t={t} patient={patient} appointments={appointments} /></td><td>{patient.phone}<br /><span className="text-slate-500">{patient.age} {t.age}, {patient.gender}</span></td><td><span className="badge-info">{appointments.filter((item) => item.patientId === patient.patientId).length} {t.calendar}</span><br /><span className="mt-2 inline-block max-w-md text-slate-500">{appointments.filter((item) => item.patientId === patient.patientId).map((item) => item.treatmentPerformed).filter(Boolean).join(', ') || t.noTreatments}</span></td><td className="text-right"><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onOpen(patient)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(patient)}>{t.delete}</button></div></td></tr>)}</tbody></table></div>;
+function PatientsTable({ t, clientLabel, patients, appointments, onOpen, onDelete }: { t: Record<string, string>; clientLabel: string; patients: Patient[]; appointments: Appointment[]; onOpen: (patient: Patient) => void; onDelete: (patient: Patient) => void }) {
+  if (!patients.length) return <p className="empty-state empty-state-polished"><Users className="h-5 w-5" />No {clientLabel.toLowerCase()} yet. Add your first record from the form on the left.</p>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr><th>{clientLabel}</th><th>{t.phone}</th><th>{t.history}</th><th></th></tr></thead><tbody>{patients.map((patient) => <tr key={patient.id}><td><b className="text-slate-950 dark:text-white">{patient.patientId}</b><br />{patient.name}<div className="mt-2 flex flex-wrap gap-1">{(patient.tags || []).map((tag) => <span key={tag} className="badge-info">{tag}</span>)}</div><PatientAlerts t={t} patient={patient} appointments={appointments} /></td><td>{patient.phone}<br /><span className="text-slate-500">{patient.age} {t.age}, {patient.gender}</span></td><td><span className="badge-info">{appointments.filter((item) => item.patientId === patient.patientId).length} {t.calendar}</span><br /><span className="mt-2 inline-block max-w-md text-slate-500">{appointments.filter((item) => item.patientId === patient.patientId).map((item) => item.treatmentPerformed).filter(Boolean).join(', ') || t.noTreatments}</span></td><td className="text-right"><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onOpen(patient)}>{t.edit}</button><button className="btn-secondary" onClick={() => onDelete(patient)}>{t.delete}</button></div></td></tr>)}</tbody></table></div>;
 }
 
 function PatientAlerts({ t, patient, appointments }: { t: Record<string, string>; patient: Patient; appointments: Appointment[] }) {
@@ -1631,6 +1921,7 @@ function PatientProfile({ t, patient, appointments, payments, notes, onNote, onD
         </div>
         <span className={unpaidTotal > 0 ? 'badge-warning' : 'badge-success'}>{unpaidTotal > 0 ? `${formatMad(unpaidTotal)} unpaid` : 'Clear balance'}</span>
       </div>
+      {(patient.tags || []).length > 0 && <div className="mt-3 flex flex-wrap gap-2">{(patient.tags || []).map((tag) => <span key={tag} className="badge-info">{tag}</span>)}</div>}
       <PatientAlerts t={t} patient={patient} appointments={appointments} />
       <section className="patient-summary-grid">
         <StatCard label="Appointments" value={String(history.length)} icon={CalendarDays} detail={`${noShows} no-show`} />
@@ -1679,8 +1970,30 @@ function WaitingRoom({ t, appointments, onMove }: { t: Record<string, string>; a
   return <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{lanes.map((lane) => <div key={lane} className="card min-h-80 p-3" onDragOver={(e) => e.preventDefault()} onDrop={() => dragged && onMove(dragged, lane)}><h3 className="mb-3 flex items-center justify-between font-semibold"><span>{tStatus(lane, t)}</span><span className="badge-info">{appointments.filter((item) => item.status === lane).length}</span></h3>{appointments.filter((item) => item.status === lane).map((item) => <div key={item.id} draggable onDragStart={() => setDragged(item)} className="mb-3 cursor-grab rounded-md border border-slate-200 bg-slate-50 p-3 text-sm shadow-soft transition hover:border-brand-200 dark:border-slate-700 dark:bg-slate-800"><p className="font-semibold text-slate-950 dark:text-white">{item.patientName}</p><p className="text-slate-500">{item.time} - {item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div>)}</div>)}</section>;
 }
 
-function RevenuePage({ t, revenue, appointments, onMarkPaid, onReceipt }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[]; onMarkPaid: (appointment: Appointment) => void; onReceipt: (appointment: Appointment) => void }) {
-  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Client</th><th>{t.services}</th><th>Amount</th><th>Method</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{formatMad(item.revenueAmount)}</td><td>{item.paymentMethod}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div></section>;
+function RevenuePage({ t, revenue, appointments, money, onMarkPaid, onReceipt, onReport }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[]; money: (amount: number) => string; onMarkPaid: (appointment: Appointment) => void; onReceipt: (appointment: Appointment) => void; onReport: (period: 'daily' | 'monthly') => void }) {
+  const topClients = Object.entries(appointments.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.patientName]: (acc[item.patientName] || 0) + collectedAmount(item) }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topServices = Object.entries(appointments.reduce<Record<string, number>>((acc, item) => {
+    const label = item.serviceName || item.treatmentPerformed || 'Unspecified';
+    return { ...acc, [label]: (acc[label] || 0) + 1 };
+  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return (
+    <section className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={money(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={money(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={money(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={money(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={money(revenue.outstanding)} icon={WalletCards} /></div>
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_320px]">
+        <Chart title="Top clients" rows={topClients} money formatValue={money} />
+        <Chart title="Top services" rows={topServices} />
+        <div className="card p-4">
+          <h3 className="section-title">Reports</h3>
+          <p className="section-subtitle">Download clean HTML reports for closeout and monthly review.</p>
+          <div className="mt-4 space-y-2">
+            <button className="btn-secondary w-full justify-center" onClick={() => onReport('daily')}><Download className="h-4 w-4" />Daily closeout</button>
+            <button className="btn-secondary w-full justify-center" onClick={() => onReport('monthly')}><Download className="h-4 w-4" />Monthly report</button>
+          </div>
+        </div>
+      </div>
+      <div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Client</th><th>{t.services}</th><th>Total</th><th>Deposit</th><th>Balance</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{money(item.revenueAmount)}</td><td>{money(Number(item.depositAmount || 0))}</td><td>{money(remainingBalance(item))}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div>
+    </section>
+  );
 }
 
 function Stats({ t, appointments, patients }: { t: Record<string, string>; appointments: Appointment[]; patients: Patient[] }) {
@@ -1694,9 +2007,9 @@ function Stats({ t, appointments, patients }: { t: Record<string, string>; appoi
   return <section className="grid gap-4 xl:grid-cols-2"><StatCard label={t.noShowRate} value={`${noShowRate}%`} icon={Activity} /><StatCard label={t.newReturning} value={`${patients.length} / ${returning}`} icon={Users} /><Chart title={t.appointmentsByMonth} rows={appointmentsByMonth.map(([label, value]) => [label, value])} /><Chart title={t.revenueByMonth} rows={revenueByMonth.map(([label, value]) => [label, value])} money /><Chart title={t.commonTreatments} rows={treatments.slice(0, 8).map(([label, value]) => [label, value])} /><Chart title={t.revenueByService} rows={revenueByService.map(([label, value]) => [label, value])} money /><Chart title={t.requestedServices} rows={requestedServices.map(([label, value]) => [label, value])} /></section>;
 }
 
-function Chart({ title, rows, money = false }: { title: string; rows: [string, number][]; money?: boolean }) {
+function Chart({ title, rows, money = false, formatValue }: { title: string; rows: [string, number][]; money?: boolean; formatValue?: (value: number) => string }) {
   const max = Math.max(1, ...rows.map(([, value]) => value));
-  return <div className="card p-4"><h3 className="section-title">{title}</h3><div className="mt-4 space-y-3">{rows.length === 0 && <p className="empty-state">No data yet.</p>}{rows.map(([label, value]) => <div key={label}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate">{label}</span><span className="font-semibold">{money ? formatMad(value) : value}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div>;
+  return <div className="card p-4"><h3 className="section-title">{title}</h3><div className="mt-4 space-y-3">{rows.length === 0 && <p className="empty-state">No data yet.</p>}{rows.map(([label, value]) => <div key={label}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate">{label}</span><span className="font-semibold">{formatValue ? formatValue(value) : money ? formatMad(value) : value}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div>;
 }
 
 function RecycleBin({ t, query, items, onRestore, onDelete }: { t: Record<string, string>; query: string; items: DeletedItem[]; onRestore: (item: DeletedItem) => void; onDelete: (item: DeletedItem) => void }) {

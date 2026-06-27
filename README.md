@@ -72,9 +72,9 @@ npm run dev
 
 Open the Vite URL, usually `http://localhost:5173`.
 
-The public DR123 app opens directly to Login/Register. Existing users sign in with Firebase Authentication email/password accounts.
+The public Top Management You app opens directly to Login/Register. Existing users sign in with Firebase Authentication email/password accounts.
 
-New users register with name, email, password, and a valid DR123 license key. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`. During registration, DR123 creates the Firebase Auth user, activates/binds the license, and creates the user document in one Firestore transaction. If license registration fails, the temporary Auth user is deleted.
+New users register with name, email, password, and a valid Top Management You license key. Valid license keys are created only in the private `license-admin` desktop app and stored in `licenses/{key}`. During registration, Top Management You creates the Firebase Auth user, binds the license to that account, and creates the user document in one Firestore transaction. If license registration fails, the temporary Auth user is deleted.
 
 ## Build
 
@@ -111,7 +111,9 @@ licenses/{key}
   expiresAt: ISO string
   clinicName: string
   contactPhone: string
-  deviceId: string
+  deviceId: string (legacy; not used for access checks)
+  ownerUid: string
+  ownerEmail: string
   lastCheckedAt: ISO string
 
 admins/{uid}
@@ -236,11 +238,11 @@ To grant owner access to the private desktop admin app:
 
 The public customer app contains only license validation code. License generation and management live only in `license-admin`.
 
-## DR123 License Admin
+## Top Management You License Admin
 
 `license-admin` is a separate private React + Vite + TypeScript + Electron desktop app for the app owner. It connects to the same `dr123-efedd` Firebase project and manages the top-level `licenses` collection.
 
-The desktop app bundles the DR123 Firebase web configuration in `license-admin/src/firebaseConfig.ts` so packaged `.exe` builds do not depend on shell environment variables being present at runtime. `VITE_FIREBASE_*` variables are still supported as build-time overrides. If any required config value is missing, the app shows `Firebase configuration missing` before attempting Firebase Auth.
+The desktop app bundles the Top Management You Firebase web configuration in `license-admin/src/firebaseConfig.ts` so packaged `.exe` builds do not depend on shell environment variables being present at runtime. `VITE_FIREBASE_*` variables are still supported as build-time overrides. If any required config value is missing, the app shows `Firebase configuration missing` before attempting Firebase Auth.
 
 Features:
 

@@ -20,6 +20,7 @@ export interface Patient {
   gender: Gender;
   address: string;
   medicalNotes: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   deleted?: boolean;
@@ -41,8 +42,12 @@ export interface Appointment {
   notes: string;
   treatmentPerformed: string;
   revenueAmount: number;
+  depositAmount?: number;
   paid: boolean;
   paymentMethod: PaymentMethod;
+  recurrenceRule?: 'none' | 'weekly' | 'monthly';
+  recurrenceCount?: number;
+  recurringGroupId?: string;
   createdAt: string;
   updatedAt: string;
   deleted?: boolean;

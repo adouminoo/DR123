@@ -248,7 +248,7 @@ function readBackupArray(input: Record<string, unknown>, key: BackupArrayKey, la
 }
 
 export function prepareBackupImport(input: unknown): PreparedBackupImport {
-  if (!isRecord(input)) throw new Error('Backup file is not a valid DR123 backup.');
+  if (!isRecord(input)) throw new Error('Backup file is not a valid Top Management You backup.');
 
   const warnings: string[] = [];
   const backup = {
@@ -278,7 +278,7 @@ export function exportExcel(backup: ClinicBackup) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(backup.treatments), 'Treatments');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(backup.services), 'Services');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(backup.timelineNotes), 'Notes Timeline');
-  XLSX.writeFile(wb, `dr123-backup-${todayIso()}.xlsx`);
+  XLSX.writeFile(wb, `top-management-you-backup-${todayIso()}.xlsx`);
 }
 
 export async function importBackup(backup: ClinicBackup) {

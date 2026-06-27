@@ -655,13 +655,13 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
   return (
     <section className={`auth-visual ${isLicense ? 'auth-visual-license' : ''}`}>
       <div className="auth-visual-topline">
-        <div className="auth-mark">DR123</div>
+        <div className="auth-mark">TMY</div>
         <span>{isLicense ? 'License security layer' : 'Appointment command workspace'}</span>
       </div>
       <div className="auth-hero-copy">
         <p className="auth-kicker">{isLicense ? 'Protected registration' : 'Premium appointment operations'}</p>
         <h2>{isLicense ? 'Verify access before the workspace opens.' : 'A secure command center for modern appointment teams.'}</h2>
-        <p>{isLicense ? 'License status, account trust, and secure access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, client data confidence, and daily schedule control.'}</p>
+        <p>{isLicense ? 'License status, account trust, and secure access are presented as one calm enterprise-grade gateway.' : 'A polished Top Management You entry experience built around trust, client data confidence, and daily schedule control.'}</p>
       </div>
       <div className="auth-art" aria-hidden="true">
         <div className="auth-art-grid" />
@@ -754,7 +754,7 @@ function Login({
             <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="auth-logo" />
             <div>
               <h1 className="auth-title">{APP_NAME}</h1>
-              <p className="text-sm font-medium text-slate-300">DR123 account access</p>
+              <p className="text-sm font-medium text-slate-300">Top Management You account access</p>
             </div>
           </div>
           <p className="auth-copy">Existing users can login with email and password. New users register once with a valid license key.</p>
@@ -774,7 +774,7 @@ function Login({
           </>
         )}
         <label className="auth-label">Email</label>
-        <input className="input mt-2 mb-3" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
+        <input className="input mt-2 mb-3" type="text" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
         <label className="auth-label">{t.password}</label>
         <input className="input mt-2" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
         {mode === 'register' && (
@@ -788,7 +788,7 @@ function Login({
         )}
         {error && <p className="auth-alert">{error}</p>}
         <button className="btn-primary mt-6 w-full" disabled={loading}>{loading ? t.checking : mode === 'register' ? 'Create account' : t.login}</button>
-        <p className="auth-footer-note">Need access? Contact your DR123 license owner.</p>
+        <p className="auth-footer-note">Need access? Contact your license owner.</p>
       </form>
       </div>
     </main>
@@ -842,7 +842,7 @@ function SetupWizard({ profile, setProfile, onSubmit, onSkip }: { profile: Busin
       <div className="panel-heading">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">First run setup</p>
-          <h3 className="section-title mt-1">Make DR123 match your business</h3>
+          <h3 className="section-title mt-1">Make Top Management You match your business</h3>
           <p className="section-subtitle">Choose your business type once. You can change all labels later in Settings.</p>
         </div>
         <button type="button" className="btn-secondary" onClick={onSkip}>Later</button>
@@ -905,7 +905,7 @@ function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: Licens
 }
 
 export default function App() {
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('dr123_language') as Language) || 'en');
+  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('tmy_language') as Language) || (localStorage.getItem('dr123_language') as Language) || 'en');
   const t = translations[language];
   const rtl = language === 'ar';
   const [user, setUser] = useState<AppUser | null>(null);
@@ -913,7 +913,7 @@ export default function App() {
   const registrationPendingRef = useRef(false);
   const [authError, setAuthError] = useState('');
   const [license, setLicense] = useState<LicenseRecord | null>(null);
-  const [dark, setDark] = useState(() => localStorage.getItem('dr123_theme') === 'dark');
+  const [dark, setDark] = useState(() => (localStorage.getItem('tmy_theme') || localStorage.getItem('dr123_theme')) === 'dark');
   const [tab, setTab] = useState<Tab>('dashboard');
   const [query, setQuery] = useState('');
   const [patientsRaw, setPatientsRaw] = useState<Patient[]>([]);
@@ -936,13 +936,13 @@ export default function App() {
   const [editingAppointment, setEditingAppointment] = useState(false);
   const [editingService, setEditingService] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState('');
-  const [recentPatients, setRecentPatients] = useState<RecentPatient[]>(() => JSON.parse(localStorage.getItem('dr123_recent_patients') || '[]'));
+  const [recentPatients, setRecentPatients] = useState<RecentPatient[]>(() => JSON.parse(localStorage.getItem('tmy_recent_clients') || localStorage.getItem('dr123_recent_patients') || '[]'));
   const [message, setMessage] = useState('');
   const [quickInput, setQuickInput] = useState('');
   const [draftPrompt, setDraftPrompt] = useState(false);
   const [pendingImport, setPendingImport] = useState<PreparedBackupImport | null>(null);
   const [lastBackup, setLastBackup] = useState<{ at: string; content: string } | null>(() => {
-    const saved = localStorage.getItem('dr123_last_backup');
+    const saved = localStorage.getItem('tmy_last_backup') || localStorage.getItem('dr123_last_backup');
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -1012,8 +1012,8 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
     document.documentElement.dir = rtl ? 'rtl' : 'ltr';
     document.documentElement.lang = language;
-    localStorage.setItem('dr123_theme', dark ? 'dark' : 'light');
-    localStorage.setItem('dr123_language', language);
+    localStorage.setItem('tmy_theme', dark ? 'dark' : 'light');
+    localStorage.setItem('tmy_language', language);
   }, [dark, language, rtl]);
 
   useEffect(() => {
@@ -1033,15 +1033,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const draft = localStorage.getItem('dr123_appointment_draft');
+    const draft = localStorage.getItem('tmy_appointment_draft') || localStorage.getItem('dr123_appointment_draft');
     if (draft) setDraftPrompt(true);
   }, []);
 
   useEffect(() => {
     if (!user) return;
     const payload = JSON.stringify({ savedAt: nowIso(), editing: editingAppointment, form: appointmentForm });
-    localStorage.setItem('dr123_appointment_draft', payload);
-    const timer = window.setInterval(() => localStorage.setItem('dr123_appointment_draft', payload), 4000);
+    localStorage.setItem('tmy_appointment_draft', payload);
+    const timer = window.setInterval(() => localStorage.setItem('tmy_appointment_draft', payload), 4000);
     return () => window.clearInterval(timer);
   }, [appointmentForm, editingAppointment, user]);
 
@@ -1103,6 +1103,7 @@ export default function App() {
   function resetAppointmentForm(date = todayIso(), time = '09:00') {
     setAppointmentForm({ ...emptyAppointment, date, time });
     setEditingAppointment(false);
+    localStorage.removeItem('tmy_appointment_draft');
     localStorage.removeItem('dr123_appointment_draft');
     setDraftPrompt(false);
   }
@@ -1118,7 +1119,7 @@ export default function App() {
     setEditingPatient(true);
     const next = [{ patientId: patient.patientId, name: patient.name, openedAt: nowIso() }, ...recentPatients.filter((item) => item.patientId !== patient.patientId)].slice(0, 8);
     setRecentPatients(next);
-    localStorage.setItem('dr123_recent_patients', JSON.stringify(next));
+    localStorage.setItem('tmy_recent_clients', JSON.stringify(next));
   }
 
   async function savePatient(event: React.FormEvent) {
@@ -1253,13 +1254,13 @@ export default function App() {
   }
 
   function copyReminder(appointment: Appointment) {
-    const text = `Bonjour ${appointment.patientName}, rappel de votre rendez-vous DR123 le ${appointment.date} a ${appointment.time}. Merci.`;
+    const text = `Bonjour ${appointment.patientName}, rappel de votre rendez-vous Top Management You le ${appointment.date} a ${appointment.time}. Merci.`;
     navigator.clipboard.writeText(text);
     setMessage('Reminder copied.');
   }
 
   function paymentReminderText(appointment: Appointment) {
-    return `Bonjour ${appointment.patientName}, rappel paiement DR123: ${formatMad(appointment.revenueAmount)} pour ${appointment.serviceName || appointment.treatmentPerformed || 'votre rendez-vous'} du ${appointment.date}. Merci.`;
+    return `Bonjour ${appointment.patientName}, rappel paiement Top Management You: ${formatMad(appointment.revenueAmount)} pour ${appointment.serviceName || appointment.treatmentPerformed || 'votre rendez-vous'} du ${appointment.date}. Merci.`;
   }
 
   function copyPaymentReminder(appointment: Appointment) {
@@ -1270,7 +1271,7 @@ export default function App() {
   function whatsappLink(appointment: Appointment) {
     const patient = patients.find((item) => item.patientId === appointment.patientId);
     const phone = (patient?.phone || '').replace(/\D/g, '');
-    const text = encodeURIComponent(`Bonjour ${appointment.patientName}, rappel de votre rendez-vous DR123 le ${appointment.date} a ${appointment.time}. Merci.`);
+    const text = encodeURIComponent(`Bonjour ${appointment.patientName}, rappel de votre rendez-vous Top Management You le ${appointment.date} a ${appointment.time}. Merci.`);
     return `https://wa.me/${phone}?text=${text}`;
   }
 
@@ -1465,7 +1466,7 @@ export default function App() {
     const at = nowIso();
     const next = { at, content };
     setLastBackup(next);
-    localStorage.setItem('dr123_last_backup', JSON.stringify(next));
+    localStorage.setItem('tmy_last_backup', JSON.stringify(next));
     downloadFile(`backup-${todayIso()}.json`, content, 'application/json');
     await createAudit('Backup exported', 'backup', `backup-${Date.now()}`, 'Daily JSON backup exported.');
     await load();
@@ -1476,7 +1477,7 @@ export default function App() {
   }
 
   function exportCsv() {
-    downloadFile(`dr123-appointments-${todayIso()}.csv`, toCsv(appointments as unknown as Record<string, unknown>[]), 'text/csv');
+    downloadFile(`top-management-you-appointments-${todayIso()}.csv`, toCsv(appointments as unknown as Record<string, unknown>[]), 'text/csv');
   }
 
   async function handleImport(file?: File) {
@@ -1508,7 +1509,7 @@ export default function App() {
   }
 
   function restoreDraft() {
-    const draft = localStorage.getItem('dr123_appointment_draft');
+    const draft = localStorage.getItem('tmy_appointment_draft') || localStorage.getItem('dr123_appointment_draft');
     if (!draft) return;
     const parsed = JSON.parse(draft) as { editing: boolean; form: Appointment };
     setAppointmentForm(parsed.form);
@@ -1554,7 +1555,7 @@ export default function App() {
           <img src={APP_LOGO} alt={`${APP_NAME} logo`} className="h-12 w-12 rounded-lg border border-slate-200 bg-white object-contain p-1.5 shadow-soft" />
           <div>
             <h1 className="text-lg font-bold leading-tight tracking-normal">{businessProfile.businessName || APP_NAME}</h1>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">DR123</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">Top Management You</p>
           </div>
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{t.clinicManagement}</p>
@@ -1605,7 +1606,7 @@ export default function App() {
         <main className="space-y-6 p-4 md:p-6 xl:p-8">
           {message && <button className="surface w-full p-3 text-left text-sm font-medium text-brand-700 dark:text-blue-300" onClick={() => setMessage('')}>{message}</button>}
           {showSetupWizard && <SetupWizard profile={businessForm} setProfile={setBusinessForm} onSubmit={(event) => saveBusinessProfile(event, true)} onSkip={() => setShowSetupWizard(false)} />}
-          {draftPrompt && <div className="surface flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{t.restoreDraft}</span><div className="flex gap-2"><button className="btn-primary" onClick={restoreDraft}>{t.restore}</button><button className="btn-secondary" onClick={() => { localStorage.removeItem('dr123_appointment_draft'); setDraftPrompt(false); }}>{t.discard}</button></div></div>}
+          {draftPrompt && <div className="surface flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{t.restoreDraft}</span><div className="flex gap-2"><button className="btn-primary" onClick={restoreDraft}>{t.restore}</button><button className="btn-secondary" onClick={() => { localStorage.removeItem('tmy_appointment_draft'); localStorage.removeItem('dr123_appointment_draft'); setDraftPrompt(false); }}>{t.discard}</button></div></div>}
 
           {tab === 'dashboard' && (
             <>

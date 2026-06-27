@@ -20,7 +20,8 @@ export type LicenseRecord = {
   lastCheckedAt: string;
 };
 
-const LICENSE_KEY_STORAGE = 'dr123_license_key';
+const LICENSE_KEY_STORAGE = 'tmy_license_key';
+const LEGACY_LICENSE_KEY_STORAGE = 'dr123_license_key';
 
 function normalizeLicenseKey(key: string) {
   return key.trim().toUpperCase();
@@ -31,11 +32,12 @@ function isExpired(expiresAt: string) {
 }
 
 export function getSavedLicenseKey() {
-  return localStorage.getItem(LICENSE_KEY_STORAGE) || '';
+  return localStorage.getItem(LICENSE_KEY_STORAGE) || localStorage.getItem(LEGACY_LICENSE_KEY_STORAGE) || '';
 }
 
 export function clearSavedLicense() {
   localStorage.removeItem(LICENSE_KEY_STORAGE);
+  localStorage.removeItem(LEGACY_LICENSE_KEY_STORAGE);
 }
 
 function licenseFromSnapshot(id: string, data: unknown): LicenseRecord {
@@ -120,8 +122,8 @@ export async function checkRegisteredLicenseForUser(uid: string): Promise<Licens
   const userSnap = await getDoc(doc(db, 'users', uid));
   if (!userSnap.exists()) throw new Error('License registration missing.');
 
-  const userData = userSnap.data() as { licenseKey?: string; licenseId?: string };
-  const key = normalizeLicenseKey(userData.licenseKey || userData.licenseId || getSavedLicenseKey());
+  const userData = userSnap.data() as { licenseKey?: string; licenseId?: string; activationCode?: string };
+  const key = normalizeLicenseKey(userData.licenseKey || userData.licenseId || userData.activationCode || getSavedLicenseKey());
   if (!key) throw new Error('License registration missing.');
 
   const ref = doc(db, 'licenses', key);

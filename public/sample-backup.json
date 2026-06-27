@@ -9,7 +9,7 @@
       "age": 34,
       "gender": "Female",
       "address": "Maarif, Casablanca",
-      "medicalNotes": "Allergic to penicillin.",
+      "medicalNotes": "Prefers afternoon appointments.",
       "createdAt": "2026-01-05T09:00:00.000Z",
       "updatedAt": "2026-01-05T09:00:00.000Z"
     }

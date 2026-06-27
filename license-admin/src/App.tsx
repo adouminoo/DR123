@@ -43,7 +43,7 @@ function computedStatus(license: LicenseRecord): LicenseStatus {
 }
 
 function customerKey(license: Pick<LicenseRecord, 'clinicName' | 'contactPhone'>) {
-  return `${license.clinicName?.trim() || 'Unassigned clinic'}|${license.contactPhone?.trim() || ''}`;
+  return `${license.clinicName?.trim() || 'Unassigned workspace'}|${license.contactPhone?.trim() || ''}`;
 }
 
 function toCsv(rows: LicenseRecord[]) {
@@ -165,7 +165,7 @@ export default function App() {
     });
     return Array.from(groups.entries())
       .map(([key, rows]) => {
-        const [groupName = 'Unassigned clinic', groupPhone = ''] = key.split('|');
+        const [groupName = 'Unassigned workspace', groupPhone = ''] = key.split('|');
         return {
           key,
           clinicName: groupName,
@@ -321,7 +321,7 @@ export default function App() {
             </select>
           )}
           <input type="number" min={1} max={250} value={bulkCount} onChange={(event) => setBulkCount(Number(event.target.value))} />
-          <input placeholder="Clinic name" value={clinicName} onChange={(event) => setClinicName(event.target.value)} />
+          <input placeholder="Workspace name" value={clinicName} onChange={(event) => setClinicName(event.target.value)} />
           <input placeholder="Contact phone" value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} />
           <button><KeyRound size={16} /> Generate</button>
         </form>
@@ -330,7 +330,7 @@ export default function App() {
       <section className="toolbar">
         <label>
           <Search size={16} />
-          <input placeholder="Search key, clinic, phone, device..." value={queryText} onChange={(event) => setQueryText(event.target.value)} />
+          <input placeholder="Search key, workspace, phone, device..." value={queryText} onChange={(event) => setQueryText(event.target.value)} />
         </label>
         <button className={customerFilter === 'all' ? 'selected-filter' : ''} onClick={() => setCustomerFilter('all')}><Building2 size={16} /> All customers</button>
         <button onClick={exportCsv}><Download size={16} /> Export CSV</button>
@@ -362,7 +362,7 @@ export default function App() {
               <th>Key</th>
               <th>Type</th>
               <th>Status</th>
-              <th>Clinic</th>
+              <th>Workspace</th>
               <th>Expires</th>
               <th>Device</th>
               <th>Last checked</th>

@@ -140,15 +140,15 @@ const emptyService: Service = {
 
 const translations = {
   en: {
-    singleDoctor: 'Single-doctor dashboard',
-    loginHelp: 'Login with the clinic password. First run creates the default password: admin123.',
+    singleDoctor: 'Appointment workspace',
+    loginHelp: 'Login with your workspace password.',
     password: 'Password',
     login: 'Login',
     checking: 'Checking...',
     invalidPassword: 'Invalid password.',
     dashboard: 'Dashboard',
     calendar: 'Calendar',
-    patients: 'Patients',
+    patients: 'Clients',
     services: 'Services',
     waiting: 'Waiting',
     revenue: 'Revenue',
@@ -157,14 +157,14 @@ const translations = {
     recycle: 'Recycle Bin',
     audit: 'Audit',
     settings: 'Settings',
-    search: 'Search ID, patient, phone, appointment...',
+    search: 'Search ID, client, phone, appointment...',
     logout: 'Logout',
     todayRevenue: 'Today revenue',
     weekRevenue: 'Week revenue',
     monthRevenue: 'Month revenue',
     outstanding: 'Outstanding',
     todaysQueue: "Today's Queue",
-    recentPatients: 'Recently Opened Patients',
+    recentPatients: 'Recently Opened Clients',
     upcoming: 'Upcoming appointments',
     outstandingPayments: 'Outstanding payments',
     quickAdd: 'Quick appointment',
@@ -176,12 +176,12 @@ const translations = {
     lastBackupTime: 'Last Backup Time',
     noBackup: 'No backup yet',
     arrived: 'Arrived',
-    inConsultation: 'In Consultation',
+    inConsultation: 'In Session',
     completed: 'Completed',
-    newPatient: 'New patient',
-    editPatient: 'Edit patient',
-    patientProfile: 'Patient profile',
-    medicalTimeline: 'Medical Timeline',
+    newPatient: 'New client',
+    editPatient: 'Edit client',
+    patientProfile: 'Client profile',
+    medicalTimeline: 'Notes Timeline',
     addNote: 'Add note',
     edit: 'Edit',
     delete: 'Delete',
@@ -196,7 +196,7 @@ const translations = {
     serviceDropdown: 'Service',
     newAppointment: 'New appointment',
     editAppointment: 'Edit appointment',
-    treatment: 'Treatment performed',
+    treatment: 'Service notes',
     paid: 'Paid',
     unpaid: 'Unpaid',
     notes: 'Notes',
@@ -204,7 +204,7 @@ const translations = {
     requestedServices: 'Most Requested Services',
     appointmentsByMonth: 'Appointments by month',
     revenueByMonth: 'Revenue by month',
-    commonTreatments: 'Most common treatments',
+    commonTreatments: 'Most common work',
     noShowRate: 'No-show rate',
     newReturning: 'New vs returning',
     active: 'Active',
@@ -234,39 +234,39 @@ const translations = {
     gender: 'Gender',
     address: 'Address',
     history: 'History',
-    patient: 'Patient',
+    patient: 'Client',
     date: 'Date',
     amount: 'Amount',
     method: 'Method',
     status: 'Status',
-    noTreatments: 'No treatments',
-    selectPatient: 'Select patient',
+    noTreatments: 'No service notes',
+    selectPatient: 'Select client',
     custom: 'Custom',
     copyReminder: 'Copy reminder',
     searchResults: 'Search results',
-    clinicManagement: 'Clinic management',
-    noTreatmentYet: 'No treatment yet',
+    clinicManagement: 'Appointment management',
+    noTreatmentYet: 'No service notes yet',
     newService: 'New service',
     deleteCategory: 'Delete category',
     statusScheduled: 'Scheduled',
     statusConfirmed: 'Confirmed',
     statusArrived: 'Arrived',
     statusWaiting: 'Waiting',
-    statusInConsultation: 'In Consultation',
+    statusInConsultation: 'In Session',
     statusCompleted: 'Completed',
     statusCancelled: 'Cancelled',
     statusNoShow: 'No Show',
   },
   fr: {
-    singleDoctor: 'Tableau de bord médecin unique',
-    loginHelp: 'Connectez-vous avec le mot de passe de la clinique. Au premier lancement, le mot de passe est admin123.',
+    singleDoctor: 'Espace rendez-vous',
+    loginHelp: 'Connectez-vous avec le mot de passe de votre espace.',
     password: 'Mot de passe',
     login: 'Connexion',
     checking: 'Vérification...',
     invalidPassword: 'Mot de passe invalide.',
     dashboard: 'Tableau',
     calendar: 'Calendrier',
-    patients: 'Patients',
+    patients: 'Clients',
     services: 'Services',
     waiting: 'Attente',
     revenue: 'Revenus',
@@ -275,14 +275,14 @@ const translations = {
     recycle: 'Corbeille',
     audit: 'Audit',
     settings: 'Paramètres',
-    search: 'Rechercher ID, patient, téléphone, rendez-vous...',
+    search: 'Rechercher ID, client, téléphone, rendez-vous...',
     logout: 'Déconnexion',
     todayRevenue: "Revenu aujourd'hui",
     weekRevenue: 'Revenu semaine',
     monthRevenue: 'Revenu mois',
     outstanding: 'Impayés',
     todaysQueue: "File d'aujourd'hui",
-    recentPatients: 'Patients récemment ouverts',
+    recentPatients: 'Clients récemment ouverts',
     upcoming: 'Rendez-vous à venir',
     outstandingPayments: 'Paiements impayés',
     quickAdd: 'Rendez-vous rapide',
@@ -294,12 +294,12 @@ const translations = {
     lastBackupTime: 'Dernière heure',
     noBackup: 'Aucune sauvegarde',
     arrived: 'Arrivé',
-    inConsultation: 'En consultation',
+    inConsultation: 'En session',
     completed: 'Terminé',
-    newPatient: 'Nouveau patient',
-    editPatient: 'Modifier patient',
-    patientProfile: 'Profil patient',
-    medicalTimeline: 'Chronologie médicale',
+    newPatient: 'Nouveau client',
+    editPatient: 'Modifier client',
+    patientProfile: 'Profil client',
+    medicalTimeline: 'Chronologie des notes',
     addNote: 'Ajouter note',
     edit: 'Modifier',
     delete: 'Supprimer',
@@ -314,7 +314,7 @@ const translations = {
     serviceDropdown: 'Service',
     newAppointment: 'Nouveau rendez-vous',
     editAppointment: 'Modifier rendez-vous',
-    treatment: 'Traitement effectué',
+    treatment: 'Notes de service',
     paid: 'Payé',
     unpaid: 'Non payé',
     notes: 'Notes',
@@ -322,7 +322,7 @@ const translations = {
     requestedServices: 'Services les plus demandés',
     appointmentsByMonth: 'Rendez-vous par mois',
     revenueByMonth: 'Revenu par mois',
-    commonTreatments: 'Traitements fréquents',
+    commonTreatments: 'Travaux fréquents',
     noShowRate: "Taux d'absence",
     newReturning: 'Nouveaux vs récurrents',
     active: 'Actif',
@@ -352,39 +352,39 @@ const translations = {
     gender: 'Genre',
     address: 'Adresse',
     history: 'Historique',
-    patient: 'Patient',
+    patient: 'Client',
     date: 'Date',
     amount: 'Montant',
     method: 'Méthode',
     status: 'Statut',
-    noTreatments: 'Aucun traitement',
-    selectPatient: 'Sélectionner patient',
+    noTreatments: 'Aucune note de service',
+    selectPatient: 'Sélectionner client',
     custom: 'Personnalisé',
     copyReminder: 'Copier rappel',
     searchResults: 'Résultats de recherche',
-    clinicManagement: 'Gestion clinique',
-    noTreatmentYet: 'Aucun traitement',
+    clinicManagement: 'Gestion des rendez-vous',
+    noTreatmentYet: 'Aucune note de service',
     newService: 'Nouveau service',
     deleteCategory: 'Supprimer catégorie',
     statusScheduled: 'Planifié',
     statusConfirmed: 'Confirmé',
     statusArrived: 'Arrivé',
     statusWaiting: 'En attente',
-    statusInConsultation: 'En consultation',
+    statusInConsultation: 'En session',
     statusCompleted: 'Terminé',
     statusCancelled: 'Annulé',
     statusNoShow: 'Absent',
   },
   ar: {
-    singleDoctor: 'لوحة طبيب واحد',
-    loginHelp: 'سجل الدخول بكلمة مرور العيادة. عند أول تشغيل تكون كلمة المرور admin123.',
+    singleDoctor: 'مساحة المواعيد',
+    loginHelp: 'سجل الدخول بكلمة مرور مساحة العمل.',
     password: 'كلمة المرور',
     login: 'دخول',
     checking: 'جار التحقق...',
     invalidPassword: 'كلمة المرور غير صحيحة.',
     dashboard: 'الرئيسية',
     calendar: 'التقويم',
-    patients: 'المرضى',
+    patients: 'العملاء',
     services: 'الخدمات',
     waiting: 'الانتظار',
     revenue: 'المداخيل',
@@ -400,7 +400,7 @@ const translations = {
     monthRevenue: 'مداخيل الشهر',
     outstanding: 'المبالغ غير المؤداة',
     todaysQueue: 'قائمة اليوم',
-    recentPatients: 'المرضى المفتوحون مؤخرا',
+    recentPatients: 'العملاء المفتوحون مؤخرا',
     upcoming: 'المواعيد القادمة',
     outstandingPayments: 'مدفوعات غير مؤداة',
     quickAdd: 'موعد سريع',
@@ -412,12 +412,12 @@ const translations = {
     lastBackupTime: 'وقت آخر نسخة',
     noBackup: 'لا توجد نسخة',
     arrived: 'وصل',
-    inConsultation: 'في الاستشارة',
+    inConsultation: 'في الجلسة',
     completed: 'مكتمل',
-    newPatient: 'مريض جديد',
-    editPatient: 'تعديل المريض',
-    patientProfile: 'ملف المريض',
-    medicalTimeline: 'الخط الزمني الطبي',
+    newPatient: 'عميل جديد',
+    editPatient: 'تعديل العميل',
+    patientProfile: 'ملف العميل',
+    medicalTimeline: 'الخط الزمني للملاحظات',
     addNote: 'إضافة ملاحظة',
     edit: 'تعديل',
     delete: 'حذف',
@@ -432,7 +432,7 @@ const translations = {
     serviceDropdown: 'الخدمة',
     newAppointment: 'موعد جديد',
     editAppointment: 'تعديل الموعد',
-    treatment: 'العلاج المنجز',
+    treatment: 'ملاحظات الخدمة',
     paid: 'مدفوع',
     unpaid: 'غير مدفوع',
     notes: 'ملاحظات',
@@ -440,7 +440,7 @@ const translations = {
     requestedServices: 'الخدمات الأكثر طلبا',
     appointmentsByMonth: 'المواعيد حسب الشهر',
     revenueByMonth: 'المداخيل حسب الشهر',
-    commonTreatments: 'العلاجات الشائعة',
+    commonTreatments: 'الأعمال الشائعة',
     noShowRate: 'نسبة الغياب',
     newReturning: 'جدد مقابل عائدين',
     active: 'نشط',
@@ -470,25 +470,25 @@ const translations = {
     gender: 'الجنس',
     address: 'العنوان',
     history: 'السجل',
-    patient: 'المريض',
+    patient: 'العميل',
     date: 'التاريخ',
     amount: 'المبلغ',
     method: 'طريقة الدفع',
     status: 'الحالة',
-    noTreatments: 'لا توجد علاجات',
-    selectPatient: 'اختر المريض',
+    noTreatments: 'لا توجد ملاحظات خدمة',
+    selectPatient: 'اختر العميل',
     custom: 'مخصص',
     copyReminder: 'نسخ التذكير',
     searchResults: 'نتائج البحث',
-    clinicManagement: 'إدارة العيادة',
-    noTreatmentYet: 'لا يوجد علاج بعد',
+    clinicManagement: 'إدارة المواعيد',
+    noTreatmentYet: 'لا توجد ملاحظات خدمة بعد',
     newService: 'خدمة جديدة',
     deleteCategory: 'حذف الفئة',
     statusScheduled: 'مجدول',
     statusConfirmed: 'مؤكد',
     statusArrived: 'وصل',
     statusWaiting: 'في الانتظار',
-    statusInConsultation: 'في الاستشارة',
+    statusInConsultation: 'في الجلسة',
     statusCompleted: 'مكتمل',
     statusCancelled: 'ملغى',
     statusNoShow: 'لم يحضر',
@@ -562,12 +562,12 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
     <section className={`auth-visual ${isLicense ? 'auth-visual-license' : ''}`}>
       <div className="auth-visual-topline">
         <div className="auth-mark">DR123</div>
-        <span>{isLicense ? 'License security layer' : 'Clinic command workspace'}</span>
+        <span>{isLicense ? 'License security layer' : 'Appointment command workspace'}</span>
       </div>
       <div className="auth-hero-copy">
-        <p className="auth-kicker">{isLicense ? 'Protected registration' : 'Premium clinic operations'}</p>
-        <h2>{isLicense ? 'Verify access before the workspace opens.' : 'A secure command center for modern clinics.'}</h2>
-        <p>{isLicense ? 'License status, device trust, and account access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, patient data confidence, and daily clinic control.'}</p>
+        <p className="auth-kicker">{isLicense ? 'Protected registration' : 'Premium appointment operations'}</p>
+        <h2>{isLicense ? 'Verify access before the workspace opens.' : 'A secure command center for modern appointment teams.'}</h2>
+        <p>{isLicense ? 'License status, device trust, and account access are presented as one calm enterprise-grade gateway.' : 'A polished DR123 entry experience built around trust, client data confidence, and daily schedule control.'}</p>
       </div>
       <div className="auth-art" aria-hidden="true">
         <div className="auth-art-grid" />
@@ -582,7 +582,7 @@ function AuthVisual({ variant }: { variant: 'account' | 'license' }) {
         </div>
         <div className="auth-fragment auth-fragment-b">
           <span />
-          <strong>{isLicense ? 'Device binding' : 'Patient timeline'}</strong>
+          <strong>{isLicense ? 'Device binding' : 'Client timeline'}</strong>
           <i />
           <i />
           <i />
@@ -730,7 +730,7 @@ function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: Licens
       <div className="panel-heading">
         <div>
           <h3 className="section-title">License status</h3>
-          <p className="section-subtitle">Current clinic access and device binding.</p>
+          <p className="section-subtitle">Current workspace access and device binding.</p>
         </div>
         {license && <span className={statusClass}>{license.status}</span>}
       </div>
@@ -739,7 +739,7 @@ function LicenseStatusPanel({ license, userEmail, onRefresh }: { license: Licens
           <div className="license-row"><span>Type</span><b>{license.type === 'full' ? 'Full lifetime' : 'Trial'}</b></div>
           <div className="license-row"><span>Account email</span><b>{userEmail || 'Not available'}</b></div>
           <div className="license-row"><span>Expires</span><b>{expiry}</b></div>
-          <div className="license-row"><span>Clinic</span><b>{license.clinicName || 'Not set'}</b></div>
+          <div className="license-row"><span>Workspace</span><b>{license.clinicName || 'Not set'}</b></div>
           <div className="license-row"><span>Contact</span><b>{license.contactPhone || 'Not set'}</b></div>
           <div className="license-row"><span>Last checked</span><b>{license.lastCheckedAt ? new Date(license.lastCheckedAt).toLocaleString() : 'Just now'}</b></div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">{license.key}</div>
@@ -1103,7 +1103,7 @@ export default function App() {
   <p style="margin:0 0 24px;color:#64748b">Generated ${new Date().toLocaleString()}</p>
   <table style="width:100%;border-collapse:collapse;font-size:14px">
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Appointment</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right"><b>${receipt.appointmentId}</b></td></tr>
-    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Patient</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.patientName}</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Client</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.patientName}</td></tr>
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Phone</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.phone}</td></tr>
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.dateTime}</td></tr>
     <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0">Service</td><td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${receipt.service}</td></tr>
@@ -1147,7 +1147,7 @@ export default function App() {
       setAppointmentForm(draft);
       setEditingAppointment(false);
       setTab('calendar');
-      setMessage('Patient not found. Complete the appointment editor.');
+      setMessage('Client not found. Complete the appointment editor.');
       return;
     }
     if (overlaps(draft, appointments)) {
@@ -1168,7 +1168,7 @@ export default function App() {
       ...sampleServices.map((item) => setDoc(scopedDoc('services', item.id), item)),
       ...sampleServiceCategories.map((item) => setDoc(scopedDoc('service_categories', item.id), item)),
     ]);
-    await createAudit('Sample data loaded', 'settings', 'sample-data', 'Loaded demo patients, appointments, payments, treatments, services, and categories.');
+    await createAudit('Sample data loaded', 'settings', 'sample-data', 'Loaded demo clients, appointments, payments, service notes, services, and categories.');
     await load();
   }
 
@@ -1265,7 +1265,7 @@ export default function App() {
 
   const navGroups: Array<{ label: string; items: Array<[Tab, typeof Activity, string]> }> = [
     { label: 'Command', items: [['dashboard', Activity, t.dashboard], ['calendar', CalendarDays, t.calendar], ['waiting', Users, t.waiting]] },
-    { label: 'Clinic data', items: [['patients', Users, t.patients], ['services', Stethoscope, t.services]] },
+    { label: 'Workspace data', items: [['patients', Users, t.patients], ['services', Stethoscope, t.services]] },
     { label: 'Business', items: [['revenue', WalletCards, t.revenue], ['stats', Activity, t.stats]] },
     { label: 'System', items: [['backup', Database, t.backup], ['recycle', Archive, t.recycle], ['audit', Database, t.audit], ['settings', Settings, t.settings]] },
   ];
@@ -1338,8 +1338,8 @@ export default function App() {
               <section className="dashboard-hero">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">{t.dashboard}</p>
-                  <h3 className="mt-2 text-2xl font-bold tracking-normal text-slate-950 dark:text-white">Clinic command center</h3>
-                  <p className="section-subtitle">Today's revenue, patient flow, and follow-up work in one focused view.</p>
+                  <h3 className="mt-2 text-2xl font-bold tracking-normal text-slate-950 dark:text-white">Appointment command center</h3>
+                  <p className="section-subtitle">Today's revenue, client flow, and follow-up work in one focused view.</p>
                 </div>
                 <div className="dashboard-hero-meta">
                   <span>{new Date().toLocaleDateString()}</span>
@@ -1407,7 +1407,7 @@ export default function App() {
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-300">Import preview</p>
                     <h3 className="section-title mt-1">{pendingImport.totalRecords} records ready to import</h3>
-                    <p className="section-subtitle">Review the backup contents before writing them to this clinic account.</p>
+                    <p className="section-subtitle">Review the backup contents before writing them to this workspace account.</p>
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {pendingImport.summary.filter((item) => item.count > 0).map((item) => (
@@ -1439,7 +1439,7 @@ export default function App() {
             <section className="grid max-w-5xl gap-4 lg:grid-cols-[1fr_360px]">
               <div className="card p-5">
                 <h3 className="section-title">{t.adminPassword}</h3>
-                <p className="section-subtitle">Update the password for the signed-in clinic account.</p>
+                <p className="section-subtitle">Update the password for the signed-in workspace account.</p>
                 <form className="mt-4 space-y-3" onSubmit={changePassword}><input className="input" name="password" type="password" placeholder={t.password} /><button className="btn-primary">{t.updatePassword}</button></form>
               </div>
               <LicenseStatusPanel license={license} userEmail={user.email} onRefresh={user ? () => openAppForUser(user) : undefined} />
@@ -1460,7 +1460,7 @@ function QuickAdd({ t, quickInput, setQuickInput, onSubmit, onBackup, lastBackup
       <div className="panel-heading">
         <div>
           <h3 className="section-title">{t.quickAdd}</h3>
-          <p className="section-subtitle">Create fast appointments without leaving the command center.</p>
+          <p className="section-subtitle">Create fast rendez-vous without leaving the command center.</p>
         </div>
         <span className="badge-info">{t.create}</span>
       </div>
@@ -1565,7 +1565,7 @@ function PatientForm({ t, form, setForm, editing, onSubmit, onReset }: { t: Reco
       <input className="input" placeholder={t.phone} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
       <div className="grid grid-cols-2 gap-3"><input className="input" type="number" placeholder={t.age} value={form.age || ''} onChange={(e) => setForm({ ...form, age: Number(e.target.value) })} /><select className="input" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as Patient['gender'] })}><option>Female</option><option>Male</option><option>Other</option></select></div>
       <input className="input" placeholder={t.address} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-      <textarea className="input min-h-24" placeholder="Medical notes" value={form.medicalNotes} onChange={(e) => setForm({ ...form, medicalNotes: e.target.value })} />
+      <textarea className="input min-h-24" placeholder="Internal notes" value={form.medicalNotes} onChange={(e) => setForm({ ...form, medicalNotes: e.target.value })} />
       <div className="flex gap-2"><button className="btn-primary"><Plus className="h-4 w-4" />{t.save}</button><button type="button" className="btn-secondary" onClick={onReset}>{t.clear}</button></div>
     </form>
   );
@@ -1638,7 +1638,7 @@ function PatientProfile({ t, patient, appointments, payments, notes, onNote, onD
         <StatCard label="Outstanding" value={formatMad(unpaidTotal)} icon={WalletCards} detail="Open balance" tone={unpaidTotal > 0 ? 'warning' : 'neutral'} />
       </section>
       <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/50">
-        <p className="font-semibold text-slate-950 dark:text-white">Medical notes</p>
+        <p className="font-semibold text-slate-950 dark:text-white">Internal notes</p>
         <p className="mt-1 text-slate-500 dark:text-slate-400">{patient.medicalNotes || t.noData}</p>
       </div>
       <section className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -1680,7 +1680,7 @@ function WaitingRoom({ t, appointments, onMove }: { t: Record<string, string>; a
 }
 
 function RevenuePage({ t, revenue, appointments, onMarkPaid, onReceipt }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[]; onMarkPaid: (appointment: Appointment) => void; onReceipt: (appointment: Appointment) => void }) {
-  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Patient</th><th>{t.services}</th><th>Amount</th><th>Method</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{formatMad(item.revenueAmount)}</td><td>{item.paymentMethod}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div></section>;
+  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={formatMad(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={formatMad(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={formatMad(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={formatMad(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={formatMad(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Client</th><th>{t.services}</th><th>Amount</th><th>Method</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{formatMad(item.revenueAmount)}</td><td>{item.paymentMethod}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div></section>;
 }
 
 function Stats({ t, appointments, patients }: { t: Record<string, string>; appointments: Appointment[]; patients: Patient[] }) {

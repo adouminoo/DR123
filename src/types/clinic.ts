@@ -45,6 +45,9 @@ export interface Appointment {
   depositAmount?: number;
   paid: boolean;
   paymentMethod: PaymentMethod;
+  recurrenceRule?: 'none' | 'weekly' | 'monthly';
+  recurrenceCount?: number;
+  recurringGroupId?: string;
   createdAt: string;
   updatedAt: string;
   deleted?: boolean;

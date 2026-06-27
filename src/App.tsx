@@ -165,6 +165,24 @@ function remainingBalance(appointment: Pick<Appointment, 'revenueAmount' | 'depo
   return Math.max(0, Number(appointment.revenueAmount || 0) - Number(appointment.depositAmount || 0));
 }
 
+function collectedAmount(appointment: Pick<Appointment, 'revenueAmount' | 'depositAmount' | 'paid'>) {
+  return appointment.paid ? Number(appointment.revenueAmount || 0) : Number(appointment.depositAmount || 0);
+}
+
+function toLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addRecurrenceDate(date: string, index: number, rule: Appointment['recurrenceRule']) {
+  const next = new Date(`${date}T00:00:00`);
+  if (rule === 'weekly') next.setDate(next.getDate() + index * 7);
+  if (rule === 'monthly') next.setMonth(next.getMonth() + index);
+  return toLocalIsoDate(next);
+}
+
 const emptyPatient: Patient = {
   id: '',
   patientId: '',
@@ -195,6 +213,9 @@ const emptyAppointment: Appointment = {
   revenueAmount: 0,
   paid: false,
   paymentMethod: 'Cash',
+  recurrenceRule: 'none',
+  recurrenceCount: 1,
+  recurringGroupId: '',
   createdAt: '',
   updatedAt: '',
 };
@@ -1041,9 +1062,8 @@ export default function App() {
   }, [appointments, query]);
 
   const revenue = useMemo(() => {
-    const collected = (item: Appointment) => (item.paid ? Number(item.revenueAmount || 0) : Number(item.depositAmount || 0));
     const sum = (rows: Appointment[]) => rows.reduce((total, item) => total + Number(item.revenueAmount || 0), 0);
-    const sumCollected = (rows: Appointment[]) => rows.reduce((total, item) => total + collected(item), 0);
+    const sumCollected = (rows: Appointment[]) => rows.reduce((total, item) => total + collectedAmount(item), 0);
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -1116,6 +1136,11 @@ export default function App() {
     const patient = patients.find((item) => item.patientId === appointmentForm.patientId);
     const stamp = nowIso();
     const isNew = !appointmentForm.id;
+    const recurrenceRule = appointmentForm.recurrenceRule || 'none';
+    const recurrenceCount = isNew && recurrenceRule !== 'none'
+      ? Math.max(1, Math.min(52, Number(appointmentForm.recurrenceCount || 1)))
+      : 1;
+    const recurringGroupId = recurrenceCount > 1 ? crypto.randomUUID() : appointmentForm.recurringGroupId || '';
     const appointment: Appointment = {
       ...appointmentForm,
       id: appointmentForm.id || crypto.randomUUID(),
@@ -1124,20 +1149,43 @@ export default function App() {
       duration: Number(appointmentForm.duration || 30),
       revenueAmount: Number(appointmentForm.revenueAmount || 0),
       depositAmount: Math.max(0, Math.min(Number(appointmentForm.depositAmount || 0), Number(appointmentForm.revenueAmount || 0))),
+      recurrenceRule: recurrenceCount > 1 ? recurrenceRule : 'none',
+      recurrenceCount,
+      recurringGroupId,
       createdAt: appointmentForm.createdAt || stamp,
       updatedAt: stamp,
       deleted: false,
     };
     appointment.paid = appointment.paid || remainingBalance(appointment) === 0;
-    if (overlaps(appointment, appointments)) {
+    const appointmentsToSave = Array.from({ length: recurrenceCount }, (_, index): Appointment => {
+      const repeated = index === 0 ? appointment : {
+        ...appointment,
+        id: crypto.randomUUID(),
+        appointmentId: makeAppointmentId(appointmentsRaw.length + index),
+        date: addRecurrenceDate(appointment.date, index, recurrenceRule),
+        depositAmount: 0,
+        paid: false,
+        createdAt: stamp,
+        updatedAt: stamp,
+      };
+      repeated.paid = repeated.paid || remainingBalance(repeated) === 0;
+      return repeated;
+    });
+
+    const hasOverlap = appointmentsToSave.some((candidate, index) => overlaps(candidate, [...appointments, ...appointmentsToSave.slice(0, index)]));
+    if (hasOverlap) {
       setMessage('Appointment overlaps another active appointment.');
       return;
     }
-    if (appointment.paid && appointment.revenueAmount > 0) {
-      await upsertAppointmentWithPayment(appointment, isNew);
-    } else {
-      await upsertAppointment(appointment, isNew);
+    for (const item of appointmentsToSave) {
+      const itemIsNew = item.id !== appointmentForm.id;
+      if (item.paid && item.revenueAmount > 0) {
+        await upsertAppointmentWithPayment(item, itemIsNew);
+      } else {
+        await upsertAppointment(item, itemIsNew);
+      }
     }
+    if (appointmentsToSave.length > 1) setMessage(`Created ${appointmentsToSave.length} recurring appointments.`);
     resetAppointmentForm();
     await load();
   }
@@ -1270,6 +1318,49 @@ export default function App() {
 </html>`;
     downloadFile(`${status.toLowerCase()}-${appointment.appointmentId}.html`, html, 'text/html');
     setMessage(`${status} downloaded.`);
+  }
+
+  function downloadRevenueReport(period: 'daily' | 'monthly') {
+    const today = todayIso();
+    const title = period === 'daily' ? 'Daily closeout report' : 'Monthly revenue report';
+    const rows = appointments.filter((item) => period === 'daily' ? item.date === today : item.date.slice(0, 7) === today.slice(0, 7));
+    const completed = rows.filter((item) => item.status === 'Completed').length;
+    const noShows = rows.filter((item) => item.status === 'No Show').length;
+    const collected = rows.reduce((total, item) => total + collectedAmount(item), 0);
+    const outstanding = rows.reduce((total, item) => total + remainingBalance(item), 0);
+    const topClients = Object.entries(rows.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.patientName]: (acc[item.patientName] || 0) + collectedAmount(item) }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topServices = Object.entries(rows.reduce<Record<string, number>>((acc, item) => {
+      const label = item.serviceName || item.treatmentPerformed || 'Unspecified';
+      return { ...acc, [label]: (acc[label] || 0) + 1 };
+    }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const appointmentRows = rows.map((item) => `<tr><td>${escapeHtml(item.date)} ${escapeHtml(item.time)}</td><td>${escapeHtml(item.patientName)}</td><td>${escapeHtml(item.serviceName || item.treatmentPerformed || '-')}</td><td>${escapeHtml(item.status)}</td><td style="text-align:right">${money(collectedAmount(item))}</td><td style="text-align:right">${money(remainingBalance(item))}</td></tr>`).join('');
+    const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>${title}</title></head>
+<body style="font-family:Arial,sans-serif;margin:40px;color:#0f172a">
+  <h1 style="margin:0 0 8px">${escapeHtml(businessProfile.businessName || APP_NAME)} - ${title}</h1>
+  <p style="margin:0 0 24px;color:#64748b">Generated ${new Date().toLocaleString()}</p>
+  <section style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px">
+    ${[
+      ['Appointments', rows.length],
+      ['Completed', completed],
+      ['No-shows', noShows],
+      ['Collected', money(collected)],
+      ['Outstanding', money(outstanding)],
+    ].map(([label, value]) => `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px"><p style="margin:0;color:#64748b;font-size:12px">${escapeHtml(label)}</p><b style="font-size:18px">${escapeHtml(value)}</b></div>`).join('')}
+  </section>
+  <section style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+    <div><h2 style="font-size:16px">Top clients</h2>${topClients.map(([label, value]) => `<p>${escapeHtml(label)} <b style="float:right">${money(value)}</b></p>`).join('') || '<p style="color:#64748b">No data</p>'}</div>
+    <div><h2 style="font-size:16px">Top services</h2>${topServices.map(([label, value]) => `<p>${escapeHtml(label)} <b style="float:right">${escapeHtml(value)}</b></p>`).join('') || '<p style="color:#64748b">No data</p>'}</div>
+  </section>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <thead><tr><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Date</th><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Client</th><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Service</th><th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:8px">Status</th><th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:8px">Collected</th><th style="text-align:right;border-bottom:1px solid #e2e8f0;padding:8px">Balance</th></tr></thead>
+    <tbody>${appointmentRows || '<tr><td colspan="6" style="padding:18px;color:#64748b">No appointments in this period.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`;
+    downloadFile(`${period}-revenue-report-${period === 'daily' ? today : today.slice(0, 7)}.html`, html, 'text/html');
+    setMessage(`${title} downloaded.`);
   }
 
   async function markPaid(appointment: Appointment) {
@@ -1573,7 +1664,7 @@ export default function App() {
 
           {tab === 'waiting' && <WaitingRoom t={t} appointments={appointments.filter((item) => item.date === todayIso())} onMove={updateAppointmentStatus} />}
 
-          {tab === 'revenue' && <RevenuePage t={t} revenue={revenue} appointments={appointments} money={money} onMarkPaid={markPaid} onReceipt={downloadReceipt} />}
+          {tab === 'revenue' && <RevenuePage t={t} revenue={revenue} appointments={appointments} money={money} onMarkPaid={markPaid} onReceipt={downloadReceipt} onReport={downloadRevenueReport} />}
 
           {tab === 'stats' && <Stats t={t} appointments={appointments} patients={patients} />}
 
@@ -1770,6 +1861,15 @@ function AppointmentForm({ t, form, setForm, patients, services, editing, onSubm
       <select className="input" value={form.serviceId || ''} onChange={(e) => selectService(e.target.value)}><option value="">{t.serviceDropdown}</option>{services.filter((service) => service.active).map((service) => <option key={service.id} value={service.id}>{service.category} - {service.name}</option>)}</select>
       <div className="grid grid-cols-2 gap-3"><input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required /><input className="input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} required /></div>
       <div className="grid grid-cols-2 gap-3"><select className="input" value={durationOptions.includes(form.duration) ? form.duration : 0} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) || form.duration })}>{durationOptions.map((minutes) => <option key={minutes} value={minutes}>{minutes ? `${minutes}m` : t.custom}</option>)}</select><input className="input" type="number" min="1" value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <select className="input" value={form.recurrenceRule || 'none'} onChange={(e) => setForm({ ...form, recurrenceRule: e.target.value as Appointment['recurrenceRule'], recurrenceCount: e.target.value === 'none' ? 1 : form.recurrenceCount || 4 })} disabled={editing}>
+          <option value="none">No repeat</option>
+          <option value="weekly">Repeat weekly</option>
+          <option value="monthly">Repeat monthly</option>
+        </select>
+        <input className="input" type="number" min="1" max="52" placeholder="Repeats" value={form.recurrenceCount || 1} onChange={(e) => setForm({ ...form, recurrenceCount: Number(e.target.value) })} disabled={editing || (form.recurrenceRule || 'none') === 'none'} />
+      </div>
+      {editing && form.recurringGroupId && <p className="text-xs text-slate-500">Part of a recurring series. Changes apply to this rendez-vous only.</p>}
       <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as AppointmentStatus })}>{statuses.map((status) => <option key={status} value={status}>{tStatus(status, t)}</option>)}</select>
       <input className="input" placeholder={t.treatment} value={form.treatmentPerformed} onChange={(e) => setForm({ ...form, treatmentPerformed: e.target.value })} />
       <div className="grid grid-cols-2 gap-3"><input className="input" type="number" min="0" placeholder="Total amount" value={form.revenueAmount || ''} onChange={(e) => setForm({ ...form, revenueAmount: Number(e.target.value) })} /><input className="input" type="number" min="0" placeholder="Deposit paid" value={form.depositAmount || ''} onChange={(e) => setForm({ ...form, depositAmount: Number(e.target.value) })} /></div>
@@ -1869,8 +1969,30 @@ function WaitingRoom({ t, appointments, onMove }: { t: Record<string, string>; a
   return <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{lanes.map((lane) => <div key={lane} className="card min-h-80 p-3" onDragOver={(e) => e.preventDefault()} onDrop={() => dragged && onMove(dragged, lane)}><h3 className="mb-3 flex items-center justify-between font-semibold"><span>{tStatus(lane, t)}</span><span className="badge-info">{appointments.filter((item) => item.status === lane).length}</span></h3>{appointments.filter((item) => item.status === lane).map((item) => <div key={item.id} draggable onDragStart={() => setDragged(item)} className="mb-3 cursor-grab rounded-md border border-slate-200 bg-slate-50 p-3 text-sm shadow-soft transition hover:border-brand-200 dark:border-slate-700 dark:bg-slate-800"><p className="font-semibold text-slate-950 dark:text-white">{item.patientName}</p><p className="text-slate-500">{item.time} - {item.serviceName || item.treatmentPerformed || t.noTreatmentYet}</p></div>)}</div>)}</section>;
 }
 
-function RevenuePage({ t, revenue, appointments, money, onMarkPaid, onReceipt }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[]; money: (amount: number) => string; onMarkPaid: (appointment: Appointment) => void; onReceipt: (appointment: Appointment) => void }) {
-  return <section className="space-y-4"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={money(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={money(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={money(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={money(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={money(revenue.outstanding)} icon={WalletCards} /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Client</th><th>{t.services}</th><th>Total</th><th>Deposit</th><th>Balance</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{money(item.revenueAmount)}</td><td>{money(Number(item.depositAmount || 0))}</td><td>{money(remainingBalance(item))}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div></section>;
+function RevenuePage({ t, revenue, appointments, money, onMarkPaid, onReceipt, onReport }: { t: Record<string, string>; revenue: Record<string, number>; appointments: Appointment[]; money: (amount: number) => string; onMarkPaid: (appointment: Appointment) => void; onReceipt: (appointment: Appointment) => void; onReport: (period: 'daily' | 'monthly') => void }) {
+  const topClients = Object.entries(appointments.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.patientName]: (acc[item.patientName] || 0) + collectedAmount(item) }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topServices = Object.entries(appointments.reduce<Record<string, number>>((acc, item) => {
+    const label = item.serviceName || item.treatmentPerformed || 'Unspecified';
+    return { ...acc, [label]: (acc[label] || 0) + 1 };
+  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return (
+    <section className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Today" value={money(revenue.today)} icon={WalletCards} /><StatCard label="Week" value={money(revenue.week)} icon={WalletCards} /><StatCard label="Month" value={money(revenue.month)} icon={WalletCards} /><StatCard label="Year" value={money(revenue.year)} icon={WalletCards} /><StatCard label={t.outstanding} value={money(revenue.outstanding)} icon={WalletCards} /></div>
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_320px]">
+        <Chart title="Top clients" rows={topClients} money formatValue={money} />
+        <Chart title="Top services" rows={topServices} />
+        <div className="card p-4">
+          <h3 className="section-title">Reports</h3>
+          <p className="section-subtitle">Download clean HTML reports for closeout and monthly review.</p>
+          <div className="mt-4 space-y-2">
+            <button className="btn-secondary w-full justify-center" onClick={() => onReport('daily')}><Download className="h-4 w-4" />Daily closeout</button>
+            <button className="btn-secondary w-full justify-center" onClick={() => onReport('monthly')}><Download className="h-4 w-4" />Monthly report</button>
+          </div>
+        </div>
+      </div>
+      <div className="table-wrap"><table className="data-table"><thead><tr><th>Date</th><th>Client</th><th>{t.services}</th><th>Total</th><th>Deposit</th><th>Balance</th><th>Status</th><th></th></tr></thead><tbody>{appointments.filter((item) => item.revenueAmount > 0).map((item) => <tr key={item.id}><td>{item.date}</td><td>{item.patientName}</td><td>{item.serviceName || item.treatmentPerformed}</td><td className="font-semibold text-slate-950 dark:text-white">{money(item.revenueAmount)}</td><td>{money(Number(item.depositAmount || 0))}</td><td>{money(remainingBalance(item))}</td><td><span className={item.paid ? 'badge-success' : 'badge-warning'}>{item.paid ? t.paid : t.unpaid}</span></td><td><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => onReceipt(item)}>{item.paid ? 'Receipt' : 'Invoice'}</button>{!item.paid && <button className="btn-primary" onClick={() => onMarkPaid(item)}>Mark paid</button>}</div></td></tr>)}</tbody></table></div>
+    </section>
+  );
 }
 
 function Stats({ t, appointments, patients }: { t: Record<string, string>; appointments: Appointment[]; patients: Patient[] }) {
@@ -1884,9 +2006,9 @@ function Stats({ t, appointments, patients }: { t: Record<string, string>; appoi
   return <section className="grid gap-4 xl:grid-cols-2"><StatCard label={t.noShowRate} value={`${noShowRate}%`} icon={Activity} /><StatCard label={t.newReturning} value={`${patients.length} / ${returning}`} icon={Users} /><Chart title={t.appointmentsByMonth} rows={appointmentsByMonth.map(([label, value]) => [label, value])} /><Chart title={t.revenueByMonth} rows={revenueByMonth.map(([label, value]) => [label, value])} money /><Chart title={t.commonTreatments} rows={treatments.slice(0, 8).map(([label, value]) => [label, value])} /><Chart title={t.revenueByService} rows={revenueByService.map(([label, value]) => [label, value])} money /><Chart title={t.requestedServices} rows={requestedServices.map(([label, value]) => [label, value])} /></section>;
 }
 
-function Chart({ title, rows, money = false }: { title: string; rows: [string, number][]; money?: boolean }) {
+function Chart({ title, rows, money = false, formatValue }: { title: string; rows: [string, number][]; money?: boolean; formatValue?: (value: number) => string }) {
   const max = Math.max(1, ...rows.map(([, value]) => value));
-  return <div className="card p-4"><h3 className="section-title">{title}</h3><div className="mt-4 space-y-3">{rows.length === 0 && <p className="empty-state">No data yet.</p>}{rows.map(([label, value]) => <div key={label}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate">{label}</span><span className="font-semibold">{money ? formatMad(value) : value}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div>;
+  return <div className="card p-4"><h3 className="section-title">{title}</h3><div className="mt-4 space-y-3">{rows.length === 0 && <p className="empty-state">No data yet.</p>}{rows.map(([label, value]) => <div key={label}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate">{label}</span><span className="font-semibold">{formatValue ? formatValue(value) : money ? formatMad(value) : value}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-brand-600" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div>;
 }
 
 function RecycleBin({ t, query, items, onRestore, onDelete }: { t: Record<string, string>; query: string; items: DeletedItem[]; onRestore: (item: DeletedItem) => void; onDelete: (item: DeletedItem) => void }) {

@@ -1,19 +1,19 @@
 # Top Management You
 
-Top Management You is a complete single-doctor clinic management web app built with React, Vite, TypeScript, TailwindCSS, Firebase Firestore, FullCalendar, and GitHub Pages deployment.
+Top Management You is a complete appointment and rendez-vous management web app built with React, Vite, TypeScript, TailwindCSS, Firebase Firestore, FullCalendar, and GitHub Pages deployment.
 
 ## Features
 
 - Firebase Auth email/password account login and logout
-- License-key registration for new clinic accounts
-- Per-account clinic data under `users/{uid}`
+- License-key registration for new workspace accounts
+- Per-account workspace data under `users/{uid}`
 - English, French, and Arabic UI translations
 - Arabic automatically switches the app to RTL layout
 - Dark mode and responsive mobile/desktop layout
 - Dashboard with MAD/DH revenue cards
-- Today's Queue dashboard widget with Arrived, In Consultation, and Completed quick actions
-- Recently Opened Patients widget stored locally
-- Patient alert badges for first visit, unpaid balance, no-show history, and upcoming appointments
+- Today's Queue dashboard widget with Arrived, In Session, and Completed quick actions
+- Recently Opened Clients widget stored locally
+- Client alert badges for first visit, unpaid balance, no-show history, and upcoming appointments
 - Day, week, and month FullCalendar views
 - Appointment create, edit, delete, drag and drop
 - Soft deletion with Recycle Bin restore and permanent delete
@@ -21,8 +21,8 @@ Top Management You is a complete single-doctor clinic management web app built w
 - Appointment durations: 15, 30, 45, 60, 90, 120, or custom
 - Quick appointment input, such as `Adam 15:00` or `Sarah tomorrow 10:30`
 - Appointment auto-save drafts in `localStorage` with restore/discard prompt
-- Patients with IDs, medical notes, appointment/payment summaries, and treatment history
-- Patient medical timeline notes with add, edit, delete, and timestamps
+- Clients with IDs, internal notes, appointment/payment summaries, and service history
+- Client notes timeline with add, edit, delete, and timestamps
 - Services and customizable service categories
 - Service selection during appointment creation with automatic duration and price fill
 - Waiting room Kanban board
@@ -32,7 +32,7 @@ Top Management You is a complete single-doctor clinic management web app built w
 - Cash, card, transfer, and other payment methods
 - WhatsApp reminder copy/open buttons
 - Search by patient ID, patient name, phone, and appointment ID
-- Statistics for appointments by month, revenue by month, common treatments, no-show rate, new vs returning patients, revenue by service, and most requested services
+- Statistics for appointments by month, revenue by month, common work, no-show rate, new vs returning clients, revenue by service, and most requested services
 - JSON, CSV, Excel export and JSON import
 - Daily backup generator using `backup-YYYY-MM-DD.json`
 - Audit log for appointments, patients, payments, settings, backups, services, and notes
@@ -226,7 +226,7 @@ Deploy included rules:
 firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-Important: enable the Email/Password provider in Firebase Authentication before deploying. The included rules isolate each user's clinic data under `users/{uid}`, allow public validation of specific `licenses/{key}` documents, and allow license administration only for Firebase users listed in `admins/{uid}`.
+Important: enable the Email/Password provider in Firebase Authentication before deploying. The included rules isolate each user's workspace data under `users/{uid}`, allow public validation of specific `licenses/{key}` documents, and allow license administration only for Firebase users listed in `admins/{uid}`.
 
 To grant owner access to the private desktop admin app:
 
@@ -287,10 +287,10 @@ Use the `Load sample test data` button in Backups, or import `public/sample-back
 
 The in-app seed includes:
 
-- 3 patients
+- 3 clients
 - 3 appointments
 - 1 payment
-- 3 treatments
+- 3 service-note templates
 - 4 services
 - 3 service categories
 
@@ -298,9 +298,9 @@ The in-app seed includes:
 
 Daily backups include:
 
-- Patients
+- Clients
 - Appointments
-- Treatments
+- Service notes
 - Services
 - Service categories
 - Payments
